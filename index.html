@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Segmentação</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+        }
+        
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 2px;
+        }
+        
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            resize: vertical;
+            transition: border-color 0.3s;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            font-size: 13px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .result-box {
+            background: #f8f9fa;
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 15px;
+        }
+        
+        .result-box pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #333;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .alert {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            color: #856404;
+        }
+        
+        .success {
+            background: #d4edda;
+            border-color: #28a745;
+            color: #155724;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.3s;
+        }
+        
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .copy-btn {
+            position: relative;
+        }
+        
+        .copy-feedback {
+            position: absolute;
+            top: -35px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #28a745;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        
+        .copy-feedback.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Gerador de Segmentação Snowflake</h1>
+            <p>Divida automaticamente seus customer_ids em grupos tratamento (90%) e controle (10%)</p>
+        </div>
+        
+        <div class="content">
+            <!-- Passo 1: Input dos IDs -->
+            <div class="section">
+                <div class="section-title">📋 Passo 1: Cole os Customer IDs</div>
+                <p style="color: #666; font-size: 14px; margin-bottom: 10px;">
+                    Cole os customer_ids do Snowflake (um por linha ou separados por vírgula)
+                </p>
+                <textarea id="inputIds" rows="8" placeholder="12345&#10;67890&#10;11223&#10;44556&#10;..."></textarea>
+                <div class="button-group" style="margin-top: 15px;">
+                    <button class="btn-primary" onclick="processIds()">
+                        ⚡ Processar e Dividir
+                    </button>
+                    <button class="btn-secondary" onclick="clearAll()">
+                        🗑️ Limpar Tudo
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Stats -->
+            <div class="stats" id="statsContainer" style="display: none;">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalCount">0</div>
+                    <div class="stat-label">Total de IDs</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="treatmentCount">0</div>
+                    <div class="stat-label">Tratamento (90%)</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="controlCount">0</div>
+                    <div class="stat-label">Controle (10%)</div>
+                </div>
+            </div>
+            
+            <!-- Results -->
+            <div id="resultsSection" style="display: none;">
+                <div class="section">
+                    <div class="tabs">
+                        <button class="tab active" onclick="switchTab('formatted')">📝 IDs Formatados</button>
+                        <button class="tab" onclick="switchTab('query')">🔍 Query Completa</button>
+                        <button class="tab" onclick="switchTab('csv')">📊 Export CSV</button>
+                    </div>
+                    
+                    <!-- Tab: IDs Formatados -->
+                    <div id="tab-formatted" class="tab-content active">
+                        <div class="section-title">IDs Grupo Tratamento</div>
+                        <div class="result-box">
+                            <pre id="treatmentIds"></pre>
+                        </div>
+                        <div class="button-group">
+                            <button class="btn-primary copy-btn" onclick="copyToClipboard('treatmentIds', this)">
+                                📋 Copiar Tratamento
+                                <span class="copy-feedback">Copiado!</span>
+                            </button>
+                        </div>
+                        
+                        <div class="section-title" style="margin-top: 30px;">IDs Grupo Controle</div>
+                        <div class="result-box">
+                            <pre id="controlIds"></pre>
+                        </div>
+                        <div class="button-group">
+                            <button class="btn-primary copy-btn" onclick="copyToClipboard('controlIds', this)">
+                                📋 Copiar Controle
+                                <span class="copy-feedback">Copiado!</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Tab: Query Completa -->
+                    <div id="tab-query" class="tab-content">
+                        <div class="alert success">
+                            ✅ Query pronta! Os IDs já estão inseridos nos lugares corretos.
+                        </div>
+                        <div class="result-box">
+                            <pre id="fullQuery"></pre>
+                        </div>
+                        <div class="button-group">
+                            <button class="btn-primary copy-btn" onclick="copyToClipboard('fullQuery', this)">
+                                📋 Copiar Query Completa
+                                <span class="copy-feedback">Copiado!</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Tab: CSV Export -->
+                    <div id="tab-csv" class="tab-content">
+                        <div class="section-title">📥 Download para Google Sheets</div>
+                        <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                            Baixe os dados em formato CSV para importar no Google Sheets
+                        </p>
+                        <div class="button-group">
+                            <button class="btn-primary" onclick="downloadCSV()">
+                                💾 Download CSV
+                            </button>
+                        </div>
+                        <div class="result-box" style="margin-top: 20px;">
+                            <pre id="csvPreview"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let treatmentGroup = [];
+        let controlGroup = [];
+        
+        function processIds() {
+            const input = document.getElementById('inputIds').value.trim();
+            
+            if (!input) {
+                alert('Por favor, cole os customer_ids primeiro!');
+                return;
+            }
+            
+            // Parse IDs (aceita várias formatações)
+            let ids = input
+                .split(/[\n,;\s]+/)
+                .map(id => id.trim())
+                .filter(id => id && id !== '');
+            
+            // Remove duplicatas
+            ids = [...new Set(ids)];
+            
+            if (ids.length === 0) {
+                alert('Nenhum ID válido encontrado!');
+                return;
+            }
+            
+            // Embaralha os IDs para randomização
+            ids = shuffleArray(ids);
+            
+            // Calcula a divisão 90/10
+            const controlSize = Math.ceil(ids.length * 0.10);
+            const treatmentSize = ids.length - controlSize;
+            
+            // Divide os grupos
+            controlGroup = ids.slice(0, controlSize);
+            treatmentGroup = ids.slice(controlSize);
+            
+            // Atualiza estatísticas
+            document.getElementById('totalCount').textContent = ids.length;
+            document.getElementById('treatmentCount').textContent = treatmentGroup.length;
+            document.getElementById('controlCount').textContent = controlGroup.length;
+            document.getElementById('statsContainer').style.display = 'grid';
+            
+            // Gera os resultados
+            generateResults();
+            
+            // Mostra a seção de resultados
+            document.getElementById('resultsSection').style.display = 'block';
+            
+            // Scroll suave para os resultados
+            document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function shuffleArray(array) {
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+        
+        function generateResults() {
+            // Formata IDs com aspas simples e vírgula
+            const formatIds = (ids) => {
+                return ids.map(id => `'${id}'`).join(',\n');
+            };
+            
+            const treatmentFormatted = formatIds(treatmentGroup);
+            const controlFormatted = formatIds(controlGroup);
+            
+            // Atualiza IDs formatados
+            document.getElementById('treatmentIds').textContent = treatmentFormatted;
+            document.getElementById('controlIds').textContent = controlFormatted;
+            
+            // Gera a query completa
+            const fullQuery = `with tratamento_base as (
+select customer_id, 'tratamento' as type
+from dwh.il.fct_orders 
+where customer_id in
+-- GRUPO DE TRATAMENTO (${treatmentGroup.length} IDs)
+(
+${treatmentFormatted}
+)
+)
+,
+controle_base as (
+select customer_id, 'controle' as type
+from dwh.il.fct_orders 
+where customer_id in
+-- GRUPO CONTROLE (${controlGroup.length} IDs)
+(
+${controlFormatted}
+)
+)
+,
+all_churns as (
+select * from tratamento_base
+union all
+select * from controle_base
+)
+,
+visits as (
+select customer_id, event_date, event_datetime, concat(customer_id, event_datetime) as uid
+from dwh.il.fct_inapp_details 
+where event_name = 'Home Screen Viewed'
+and event_date>='2026-03-18'
+)
+,
+orders as (
+select o.customer_id, o.order_date, o.order_datetime, o.order_id, 
+max(case when lower(o.discount_code) in ('ganha20', 'ganha30') then 1 else 0 end) as use_voucher,
+sum(opd.gross_sales_lc) as aov
+    from dwh.il.dim_order_products_details opd
+    join dwh.il.fct_orders o
+    on opd.order_id=o.order_id
+    where o.is_net_order=1
+    and (lower(o.order_source) like '%jokr%')
+    and o.order_date>='2026-03-18'
+    group by all
+)
+select a.type,
+count(distinct a.customer_id) as base_size,
+count(distinct v.customer_id) as qty_uu_visits,
+count(distinct o.customer_id) as qty_uu_conversions,
+count(distinct case when o.use_voucher=1 then o.customer_id end) as qty_uu_used_voucher,
+sum(o.aov)/count(o.order_id) as aov
+from all_churns a
+left join visits v
+    on a.customer_id=v.customer_id 
+left join orders o
+    on a.customer_id=o.customer_id
+    -- and timestampdiff(hour, v.event_datetime, order_datetime)<=2
+group by all
+order by 1`;
+            
+            document.getElementById('fullQuery').textContent = fullQuery;
+            
+            // Gera preview do CSV
+            let csvContent = 'customer_id,group\n';
+            treatmentGroup.forEach(id => {
+                csvContent += `${id},tratamento\n`;
+            });
+            controlGroup.forEach(id => {
+                csvContent += `${id},controle\n`;
+            });
+            
+            document.getElementById('csvPreview').textContent = csvContent;
+        }
+        
+        function switchTab(tabName) {
+            // Remove active de todas as tabs
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            
+            // Ativa a tab selecionada
+            const clickedTab = Array.from(document.querySelectorAll('.tab')).find(tab => 
+                tab.textContent.includes(tabName === 'formatted' ? 'Formatados' : tabName === 'query' ? 'Query' : 'CSV')
+            );
+            if (clickedTab) clickedTab.classList.add('active');
+            document.getElementById(`tab-${tabName}`).classList.add('active');
+        }
+        
+        function copyToClipboard(elementId, button) {
+            const element = document.getElementById(elementId);
+            if (!element) {
+                console.error('Elemento não encontrado:', elementId);
+                alert('Erro ao copiar. Tente novamente.');
+                return;
+            }
+            
+            const text = element.textContent;
+            
+            if (!text || text.trim() === '') {
+                alert('Nenhum conteúdo para copiar. Processe os IDs primeiro!');
+                return;
+            }
+            
+            // Método alternativo que funciona no Claude.ai
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.top = '0';
+            textArea.style.left = '0';
+            textArea.style.width = '2em';
+            textArea.style.height = '2em';
+            textArea.style.padding = '0';
+            textArea.style.border = 'none';
+            textArea.style.outline = 'none';
+            textArea.style.boxShadow = 'none';
+            textArea.style.background = 'transparent';
+            textArea.style.opacity = '0';
+            
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            
+            let success = false;
+            try {
+                success = document.execCommand('copy');
+            } catch (err) {
+                console.error('Erro ao copiar:', err);
+            }
+            
+            document.body.removeChild(textArea);
+            
+            if (success) {
+                const feedback = button.querySelector('.copy-feedback');
+                if (feedback) {
+                    feedback.classList.add('show');
+                    setTimeout(() => feedback.classList.remove('show'), 2000);
+                }
+                console.log('Copiado com sucesso!');
+            } else {
+                // Se ainda assim falhar, mostra o texto em um modal para copiar manualmente
+                showCopyModal(text);
+            }
+        }
+        
+        function showCopyModal(text) {
+            const modal = document.createElement('div');
+            modal.style.position = 'fixed';
+            modal.style.top = '0';
+            modal.style.left = '0';
+            modal.style.width = '100%';
+            modal.style.height = '100%';
+            modal.style.background = 'rgba(0,0,0,0.8)';
+            modal.style.display = 'flex';
+            modal.style.alignItems = 'center';
+            modal.style.justifyContent = 'center';
+            modal.style.zIndex = '10000';
+            
+            const modalContent = document.createElement('div');
+            modalContent.style.background = 'white';
+            modalContent.style.padding = '30px';
+            modalContent.style.borderRadius = '12px';
+            modalContent.style.maxWidth = '80%';
+            modalContent.style.maxHeight = '80%';
+            modalContent.style.overflow = 'auto';
+            
+            const title = document.createElement('h3');
+            title.textContent = '📋 Copie manualmente (Ctrl+C / Cmd+C)';
+            title.style.marginBottom = '15px';
+            
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.width = '100%';
+            textArea.style.height = '300px';
+            textArea.style.fontFamily = 'monospace';
+            textArea.style.fontSize = '12px';
+            textArea.style.padding = '10px';
+            textArea.style.border = '2px solid #667eea';
+            textArea.style.borderRadius = '6px';
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = 'Fechar';
+            closeBtn.style.marginTop = '15px';
+            closeBtn.style.padding = '10px 20px';
+            closeBtn.style.background = '#667eea';
+            closeBtn.style.color = 'white';
+            closeBtn.style.border = 'none';
+            closeBtn.style.borderRadius = '6px';
+            closeBtn.style.cursor = 'pointer';
+            closeBtn.onclick = () => document.body.removeChild(modal);
+            
+            modalContent.appendChild(title);
+            modalContent.appendChild(textArea);
+            modalContent.appendChild(closeBtn);
+            modal.appendChild(modalContent);
+            document.body.appendChild(modal);
+            
+            textArea.select();
+        }
+        
+        function downloadCSV() {
+            let csvContent = 'customer_id,group\n';
+            treatmentGroup.forEach(id => {
+                csvContent += `${id},tratamento\n`;
+            });
+            controlGroup.forEach(id => {
+                csvContent += `${id},controle\n`;
+            });
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', `segmentacao_${new Date().toISOString().slice(0,10)}.csv`);
+            link.style.visibility = 'hidden';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        function clearAll() {
+            if (confirm('Tem certeza que deseja limpar todos os dados?')) {
+                document.getElementById('inputIds').value = '';
+                document.getElementById('statsContainer').style.display = 'none';
+                document.getElementById('resultsSection').style.display = 'none';
+                treatmentGroup = [];
+                controlGroup = [];
+            }
+        }
+    </script>
+</body>
+</html>
