@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador de Segmentação</title>
+    <title>Gerador de Segmentações</title>
     <style>
         * {
             margin: 0;
@@ -13,7 +13,7 @@
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #F2F2F2;
             min-height: 100vh;
             padding: 20px;
         }
@@ -21,15 +21,15 @@
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            background: #FFFFFF;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
             overflow: hidden;
         }
         
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: #0069FF;
+            color: #FFFFFF;
             padding: 30px;
             text-align: center;
         }
@@ -37,10 +37,11 @@
         .header h1 {
             font-size: 28px;
             margin-bottom: 10px;
+            font-weight: 600;
         }
         
         .header p {
-            opacity: 0.9;
+            opacity: 0.95;
             font-size: 14px;
         }
         
@@ -56,7 +57,7 @@
             font-size: 18px;
             font-weight: 600;
             margin-bottom: 15px;
-            color: #333;
+            color: #000000;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -66,14 +67,14 @@
             content: '';
             width: 4px;
             height: 24px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #0069FF;
             border-radius: 2px;
         }
         
         textarea {
             width: 100%;
             padding: 15px;
-            border: 2px solid #e0e0e0;
+            border: 2px solid #E6E6E6;
             border-radius: 8px;
             font-family: 'Courier New', monospace;
             font-size: 13px;
@@ -83,7 +84,7 @@
         
         textarea:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #0069FF;
         }
         
         .button-group {
@@ -106,22 +107,23 @@
         }
         
         .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: #0069FF;
+            color: #FFFFFF;
         }
         
         .btn-primary:hover {
+            background: #002559;
             transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 4px 12px rgba(0, 105, 255, 0.3);
         }
         
         .btn-secondary {
-            background: #f0f0f0;
-            color: #333;
+            background: #E6E6E6;
+            color: #000000;
         }
         
         .btn-secondary:hover {
-            background: #e0e0e0;
+            background: #DCDCDC;
         }
 
         .btn-small {
@@ -137,29 +139,30 @@
         }
         
         .stat-card {
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            background: #E5F0FF;
             padding: 20px;
             border-radius: 12px;
             text-align: center;
+            border: 1px solid #B2D1ED;
         }
         
         .stat-value {
             font-size: 32px;
             font-weight: 700;
-            color: #667eea;
+            color: #0069FF;
             margin-bottom: 5px;
         }
         
         .stat-label {
             font-size: 13px;
-            color: #666;
+            color: #002559;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
         
         .result-box {
-            background: #f8f9fa;
-            border: 2px dashed #667eea;
+            background: #F2F2F2;
+            border: 2px solid #E6E6E6;
             border-radius: 8px;
             padding: 20px;
             margin-top: 15px;
@@ -170,31 +173,31 @@
             word-wrap: break-word;
             font-family: 'Courier New', monospace;
             font-size: 12px;
-            color: #333;
+            color: #000000;
             max-height: 300px;
             overflow-y: auto;
         }
         
         .alert {
-            background: #fff3cd;
-            border: 1px solid #ffc107;
+            background: #F7F2B8;
+            border: 1px solid #F2D1B5;
             border-radius: 8px;
             padding: 15px;
             margin-bottom: 20px;
-            color: #856404;
+            color: #002559;
         }
         
         .success {
-            background: #d4edda;
-            border-color: #28a745;
-            color: #155724;
+            background: #ACE5D0;
+            border-color: #C2EBA3;
+            color: #002559;
         }
         
         .tabs {
             display: flex;
             gap: 10px;
             margin-bottom: 20px;
-            border-bottom: 2px solid #e0e0e0;
+            border-bottom: 2px solid #E6E6E6;
         }
         
         .tab {
@@ -204,13 +207,13 @@
             border-bottom: 3px solid transparent;
             cursor: pointer;
             font-weight: 600;
-            color: #666;
+            color: #000000;
             transition: all 0.3s;
         }
         
         .tab.active {
-            color: #667eea;
-            border-bottom-color: #667eea;
+            color: #0069FF;
+            border-bottom-color: #0069FF;
         }
         
         .tab-content {
@@ -230,8 +233,8 @@
             top: -35px;
             left: 50%;
             transform: translateX(-50%);
-            background: #28a745;
-            color: white;
+            background: #002559;
+            color: #FFFFFF;
             padding: 6px 12px;
             border-radius: 6px;
             font-size: 12px;
@@ -246,7 +249,7 @@
         }
 
         .group-config {
-            background: #f8f9fa;
+            background: #F2F2F2;
             border-radius: 8px;
             padding: 20px;
             margin-bottom: 20px;
@@ -258,15 +261,15 @@
             gap: 15px;
             margin-bottom: 15px;
             padding: 15px;
-            background: white;
+            background: #FFFFFF;
             border-radius: 8px;
-            border: 2px solid #e0e0e0;
+            border: 2px solid #E6E6E6;
         }
 
         .group-item input[type="text"] {
             flex: 1;
             padding: 10px;
-            border: 1px solid #ddd;
+            border: 1px solid #DCDCDC;
             border-radius: 6px;
             font-size: 14px;
         }
@@ -274,7 +277,7 @@
         .group-item input[type="number"] {
             width: 80px;
             padding: 10px;
-            border: 1px solid #ddd;
+            border: 1px solid #DCDCDC;
             border-radius: 6px;
             font-size: 14px;
             text-align: center;
@@ -282,25 +285,25 @@
 
         .group-item label {
             font-weight: 600;
-            color: #666;
+            color: #000000;
             min-width: 80px;
         }
 
         .add-group-btn {
             width: 100%;
             justify-content: center;
-            border: 2px dashed #667eea;
+            border: 2px dashed #0069FF;
             background: transparent;
-            color: #667eea;
+            color: #0069FF;
         }
 
         .add-group-btn:hover {
-            background: #f8f9fa;
+            background: #E5F0FF;
         }
 
         .remove-group-btn {
-            background: #dc3545;
-            color: white;
+            background: #F2ABAB;
+            color: #000000;
             padding: 8px 12px;
             border-radius: 6px;
             cursor: pointer;
@@ -308,18 +311,18 @@
         }
 
         .remove-group-btn:hover {
-            background: #c82333;
+            background: #EBB0DB;
         }
 
         input[type="text"]:focus, input[type="number"]:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #0069FF;
         }
 
         .percentage-warning {
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            color: #856404;
+            background: #F7F2B8;
+            border: 1px solid #F2D1B5;
+            color: #002559;
             padding: 10px 15px;
             border-radius: 6px;
             font-size: 13px;
@@ -343,15 +346,15 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎯 Gerador de Segmentação Snowflake</h1>
+            <h1>Gerador de Segmentações</h1>
             <p>Configure seus grupos personalizados e gere queries automaticamente</p>
         </div>
         
         <div class="content">
             <!-- Passo 1: Configuração dos Grupos -->
             <div class="section">
-                <div class="section-title">⚙️ Passo 1: Configure os Grupos</div>
-                <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                <div class="section-title">Passo 1: Configure os Grupos</div>
+                <p style="color: #002559; font-size: 14px; margin-bottom: 15px;">
                     Defina quantos grupos quer criar e a porcentagem de cada um
                 </p>
                 
@@ -373,7 +376,7 @@
                 </div>
                 
                 <button class="add-group-btn" onclick="addGroup()">
-                    ➕ Adicionar Grupo
+                    Adicionar Grupo
                 </button>
                 
                 <div class="percentage-warning" id="percentageWarning">
@@ -383,17 +386,17 @@
 
             <!-- Passo 2: Input dos IDs -->
             <div class="section">
-                <div class="section-title">📋 Passo 2: Cole os Customer IDs</div>
-                <p style="color: #666; font-size: 14px; margin-bottom: 10px;">
+                <div class="section-title">Passo 2: Cole os Customer IDs</div>
+                <p style="color: #002559; font-size: 14px; margin-bottom: 10px;">
                     Cole os customer_ids do Snowflake (um por linha ou separados por vírgula)
                 </p>
                 <textarea id="inputIds" rows="8" placeholder="12345&#10;67890&#10;11223&#10;44556&#10;..."></textarea>
                 <div class="button-group" style="margin-top: 15px;">
                     <button class="btn-primary" onclick="processIds()">
-                        ⚡ Processar e Dividir
+                        Processar e Dividir
                     </button>
                     <button class="btn-secondary" onclick="clearAll()">
-                        🗑️ Limpar Tudo
+                        Limpar Tudo
                     </button>
                 </div>
             </div>
@@ -406,9 +409,9 @@
             <div id="resultsSection" style="display: none;">
                 <div class="section">
                     <div class="tabs">
-                        <button class="tab active" onclick="switchTab('formatted')">📝 IDs Formatados</button>
-                        <button class="tab" onclick="switchTab('query')">🔍 Query Completa</button>
-                        <button class="tab" onclick="switchTab('csv')">📊 Export CSVs</button>
+                        <button class="tab active" onclick="switchTab('formatted')">IDs Formatados</button>
+                        <button class="tab" onclick="switchTab('query')">Query Completa</button>
+                        <button class="tab" onclick="switchTab('csv')">Export CSVs</button>
                     </div>
                     
                     <!-- Tab: IDs Formatados -->
@@ -419,14 +422,14 @@
                     <!-- Tab: Query Completa -->
                     <div id="tab-query" class="tab-content">
                         <div class="alert success">
-                            ✅ Query pronta! Os IDs já estão inseridos nos lugares corretos.
+                            Query pronta! Os IDs já estão inseridos nos lugares corretos.
                         </div>
                         <div class="result-box">
                             <pre id="fullQuery"></pre>
                         </div>
                         <div class="button-group">
                             <button class="btn-primary copy-btn" onclick="copyToClipboard('fullQuery', this)">
-                                📋 Copiar Query Completa
+                                Copiar Query Completa
                                 <span class="copy-feedback">Copiado!</span>
                             </button>
                         </div>
@@ -434,8 +437,8 @@
                     
                     <!-- Tab: CSV Export -->
                     <div id="tab-csv" class="tab-content">
-                        <div class="section-title">📥 Download CSVs por Grupo</div>
-                        <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                        <div class="section-title">Download CSVs por Grupo</div>
+                        <p style="color: #002559; font-size: 14px; margin-bottom: 15px;">
                             Baixe um CSV separado para cada grupo
                         </p>
                         <div id="csvButtons"></div>
@@ -620,7 +623,7 @@
                     </div>
                     <div class="button-group">
                         <button class="btn-primary copy-btn btn-small" onclick="copyToClipboard('formatted-${name}', this)">
-                            📋 Copiar ${name}
+                            Copiar ${name}
                             <span class="copy-feedback">Copiado!</span>
                         </button>
                     </div>
@@ -707,7 +710,7 @@ order by 1`;
                 const btn = document.createElement('button');
                 btn.className = 'btn-primary';
                 btn.style.marginBottom = '10px';
-                btn.innerHTML = `💾 Download ${name}.csv (${ids.length} IDs)`;
+                btn.innerHTML = `Download ${name}.csv (${ids.length} IDs)`;
                 btn.onclick = () => downloadCSV(name, ids);
                 csvDiv.appendChild(btn);
             });
@@ -808,8 +811,9 @@ order by 1`;
             modalContent.style.overflow = 'auto';
             
             const title = document.createElement('h3');
-            title.textContent = '📋 Copie manualmente (Ctrl+C / Cmd+C)';
+            title.textContent = 'Copie manualmente (Ctrl+C / Cmd+C)';
             title.style.marginBottom = '15px';
+            title.style.color = '#000000';
             
             const textArea = document.createElement('textarea');
             textArea.value = text;
@@ -818,15 +822,15 @@ order by 1`;
             textArea.style.fontFamily = 'monospace';
             textArea.style.fontSize = '12px';
             textArea.style.padding = '10px';
-            textArea.style.border = '2px solid #667eea';
+            textArea.style.border = '2px solid #0069FF';
             textArea.style.borderRadius = '6px';
             
             const closeBtn = document.createElement('button');
             closeBtn.textContent = 'Fechar';
             closeBtn.style.marginTop = '15px';
             closeBtn.style.padding = '10px 20px';
-            closeBtn.style.background = '#667eea';
-            closeBtn.style.color = 'white';
+            closeBtn.style.background = '#0069FF';
+            closeBtn.style.color = '#FFFFFF';
             closeBtn.style.border = 'none';
             closeBtn.style.borderRadius = '6px';
             closeBtn.style.cursor = 'pointer';
