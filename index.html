@@ -384,15 +384,25 @@
                 </div>
             </div>
 
-            <!-- Passo 2: Input dos IDs -->
+            <!-- Passo 2: Input dos Dados -->
             <div class="section">
-                <div class="section-title">Passo 2: Cole os Customer IDs</div>
+                <div class="section-title">Passo 2: Faça Upload do CSV</div>
                 <p style="color: #002559; font-size: 14px; margin-bottom: 10px;">
-                    Cole os customer_ids do Snowflake (um por linha ou separados por vírgula)
+                    Faça upload de um CSV com as colunas: <strong>id, telefone, email</strong>
                 </p>
-                <textarea id="inputIds" rows="8" placeholder="12345&#10;67890&#10;11223&#10;44556&#10;..."></textarea>
+                
+                <div style="margin-bottom: 15px;">
+                    <input type="file" id="csvFile" accept=".csv" style="display: none;" onchange="handleFileUpload(event)">
+                    <button class="btn-secondary" onclick="document.getElementById('csvFile').click()" style="margin-bottom: 10px;">
+                        Selecionar Arquivo CSV
+                    </button>
+                    <div id="fileName" style="color: #002559; font-size: 13px; margin-top: 5px;"></div>
+                </div>
+                
+                <textarea id="inputIds" rows="8" placeholder="Ou cole os dados aqui (formato: id,telefone,email - um por linha)&#10;123456,11999999999,email@exemplo.com&#10;789012,11888888888,outro@exemplo.com" style="display: none;"></textarea>
+                
                 <div class="button-group" style="margin-top: 15px;">
-                    <button class="btn-primary" onclick="processIds()">
+                    <button class="btn-primary" onclick="processData()">
                         Processar e Dividir
                     </button>
                     <button class="btn-secondary" onclick="clearAll()">
@@ -450,8 +460,128 @@
 
     <script>
         let groups = {};
+        let csvData = [];
         
-        function addGroup() {
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            document.getElementById('fileName').textContent = `Arquivo selecionado: ${file.name}`;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                parseCSV(text);
+            };
+            reader.readAsText(file);
+        }
+        
+        function parseCSV(text) {
+            const lines = text.trim().split('\n');
+            csvData = [];
+            
+            // Pula o header se existir
+            const startIndex = lines[0].toLowerCase().includes('id') ? 1 : 0;
+            
+            for (let i = startIndex; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                const parts = line.split(',').map(p => p.trim().replace(/['"]/g, ''));
+                
+                if (parts.length >= 3) {
+                    csvData.push({
+                        id: parts[0],
+                        telefone: parts[1],
+                        email: parts[2]
+                    });
+                }
+            }
+            
+            if (csvData.length > 0) {
+                alert(`CSV carregado com sucesso! ${csvData.length} registros encontrados.`);
+            } else {
+                alert('Nenhum dado válido encontrado no CSV. Verifique o formato.');
+            }
+        }
+        
+        function processData() {
+            // Se não tiver CSV carregado, tenta processar do textarea
+            if (csvData.length === 0) {
+                const input = document.getElementById('inputIds').value.trim();
+                if (input) {
+                    parseCSV(input);
+                }
+            }
+            
+            if (csvData.length === 0) {
+                alert('Por favor, faça upload de um CSV ou cole os dados!');
+                return;
+            }
+            
+            // Valida percentagens
+            const groupItems = document.querySelectorAll('.group-item');
+            const groupConfigs = [];
+            let totalPercentage = 0;
+            
+            groupItems.forEach(item => {
+                const name = item.querySelector('.group-name').value.trim();
+                const percentage = parseFloat(item.querySelector('.group-percentage').value) || 0;
+                
+                if (!name) {
+                    alert('Todos os grupos precisam ter um nome!');
+                    return;
+                }
+                
+                groupConfigs.push({ name, percentage });
+                totalPercentage += percentage;
+            });
+            
+            if (Math.abs(totalPercentage - 100) > 0.01) {
+                alert(`A soma das porcentagens deve ser 100%. Atual: ${totalPercentage.toFixed(1)}%`);
+                return;
+            }
+            
+            // Remove duplicatas por ID
+            const uniqueData = [];
+            const seenIds = new Set();
+            
+            csvData.forEach(row => {
+                if (!seenIds.has(row.id)) {
+                    seenIds.add(row.id);
+                    uniqueData.push(row);
+                }
+            });
+            
+            // Embaralha
+            const shuffled = shuffleArray(uniqueData);
+            
+            // Divide nos grupos
+            groups = {};
+            let startIndex = 0;
+            
+            groupConfigs.forEach((config, index) => {
+                let groupSize;
+                if (index === groupConfigs.length - 1) {
+                    groupSize = shuffled.length - startIndex;
+                } else {
+                    groupSize = Math.round(shuffled.length * (config.percentage / 100));
+                }
+                
+                groups[config.name] = shuffled.slice(startIndex, startIndex + groupSize);
+                startIndex += groupSize;
+            });
+            
+            // Atualiza estatísticas
+            updateStats();
+            
+            // Gera os resultados
+            generateResults();
+            
+            // Mostra a seção de resultados
+            document.getElementById('resultsSection').style.display = 'block';
+            document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+        }
             const config = document.getElementById('groupConfig');
             const groupItem = document.createElement('div');
             groupItem.className = 'group-item';
@@ -575,20 +705,20 @@
             statsContainer.innerHTML = '';
             
             // Total
-            const totalIds = Object.values(groups).reduce((sum, arr) => sum + arr.length, 0);
+            const totalRecords = Object.values(groups).reduce((sum, arr) => sum + arr.length, 0);
             statsContainer.innerHTML += `
                 <div class="stat-card">
-                    <div class="stat-value">${totalIds}</div>
-                    <div class="stat-label">Total de IDs</div>
+                    <div class="stat-value">${totalRecords}</div>
+                    <div class="stat-label">Total de Registros</div>
                 </div>
             `;
             
             // Cada grupo
-            Object.entries(groups).forEach(([name, ids]) => {
-                const percentage = ((ids.length / totalIds) * 100).toFixed(1);
+            Object.entries(groups).forEach(([name, records]) => {
+                const percentage = ((records.length / totalRecords) * 100).toFixed(1);
                 statsContainer.innerHTML += `
                     <div class="stat-card">
-                        <div class="stat-value">${ids.length}</div>
+                        <div class="stat-value">${records.length}</div>
                         <div class="stat-label">${name} (${percentage}%)</div>
                     </div>
                 `;
@@ -607,19 +737,19 @@
         }
         
         function generateResults() {
-            const formatIds = (ids) => ids.map(id => `'${id}'`).join(',\n');
+            const formatIds = (records) => records.map(r => `'${r.id}'`).join(',\n');
             
             // IDs Formatados
             const formattedDiv = document.getElementById('formattedResults');
             formattedDiv.innerHTML = '';
             
-            Object.entries(groups).forEach(([name, ids]) => {
+            Object.entries(groups).forEach(([name, records]) => {
                 const groupDiv = document.createElement('div');
                 groupDiv.className = 'group-result-item';
                 groupDiv.innerHTML = `
                     <div class="section-title">IDs Grupo ${name}</div>
                     <div class="result-box">
-                        <pre id="formatted-${name}">${formatIds(ids)}</pre>
+                        <pre id="formatted-${name}">${formatIds(records)}</pre>
                     </div>
                     <div class="button-group">
                         <button class="btn-primary copy-btn btn-small" onclick="copyToClipboard('formatted-${name}', this)">
@@ -640,12 +770,12 @@
         
         function generateQuery() {
             // Gera CTEs com VALUES ao invés de IN
-            const groupCTEs = Object.entries(groups).map(([name, ids]) => {
-                const formatIds = ids.map(id => `('${id}')`).join(',\n');
+            const groupCTEs = Object.entries(groups).map(([name, records]) => {
+                const formatIds = records.map(r => `('${r.id}')`).join(',\n');
                 return `${name}_ids as (
 select column1 as customer_id
 from values
--- GRUPO ${name.toUpperCase()} (${ids.length} IDs)
+-- GRUPO ${name.toUpperCase()} (${records.length} IDs)
 ${formatIds}
 )
 ,
@@ -706,20 +836,20 @@ order by 1`;
             const csvDiv = document.getElementById('csvButtons');
             csvDiv.innerHTML = '';
             
-            Object.entries(groups).forEach(([name, ids]) => {
+            Object.entries(groups).forEach(([name, records]) => {
                 const btn = document.createElement('button');
                 btn.className = 'btn-primary';
                 btn.style.marginBottom = '10px';
-                btn.innerHTML = `Download ${name}.csv (${ids.length} IDs)`;
-                btn.onclick = () => downloadCSV(name, ids);
+                btn.innerHTML = `Download ${name}.csv (${records.length} registros)`;
+                btn.onclick = () => downloadCSV(name, records);
                 csvDiv.appendChild(btn);
             });
         }
         
-        function downloadCSV(groupName, ids) {
-            let csvContent = 'customer_id\n';
-            ids.forEach(id => {
-                csvContent += `${id}\n`;
+        function downloadCSV(groupName, records) {
+            let csvContent = 'id,telefone,email\n';
+            records.forEach(record => {
+                csvContent += `${record.id},${record.telefone},${record.email}\n`;
             });
             
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -848,9 +978,12 @@ order by 1`;
         function clearAll() {
             if (confirm('Tem certeza que deseja limpar todos os dados?')) {
                 document.getElementById('inputIds').value = '';
+                document.getElementById('csvFile').value = '';
+                document.getElementById('fileName').textContent = '';
                 document.getElementById('statsContainer').style.display = 'none';
                 document.getElementById('resultsSection').style.display = 'none';
                 groups = {};
+                csvData = [];
             }
         }
     </script>
