@@ -466,12 +466,20 @@
             const file = event.target.files[0];
             if (!file) return;
             
-            document.getElementById('fileName').textContent = `Arquivo selecionado: ${file.name}`;
+            const fileNameDiv = document.getElementById('fileName');
+            fileNameDiv.textContent = `📄 Carregando ${file.name}...`;
+            fileNameDiv.style.color = '#0069FF';
             
             const reader = new FileReader();
             reader.onload = function(e) {
                 const text = e.target.result;
                 parseCSV(text);
+                fileNameDiv.textContent = `✅ ${file.name} carregado com sucesso! (${csvData.length} registros)`;
+                fileNameDiv.style.color = '#002559';
+            };
+            reader.onerror = function() {
+                fileNameDiv.textContent = `❌ Erro ao ler o arquivo`;
+                fileNameDiv.style.color = '#F2ABAB';
             };
             reader.readAsText(file);
         }
@@ -487,7 +495,8 @@
                 const line = lines[i].trim();
                 if (!line) continue;
                 
-                const parts = line.split(',').map(p => p.trim().replace(/['"]/g, ''));
+                // Suporta diferentes separadores
+                const parts = line.split(/[,;\t]/).map(p => p.trim().replace(/['"]/g, ''));
                 
                 if (parts.length >= 3) {
                     csvData.push({
@@ -495,17 +504,22 @@
                         telefone: parts[1],
                         email: parts[2]
                     });
+                } else if (parts.length === 1) {
+                    // Caso tenha só ID
+                    csvData.push({
+                        id: parts[0],
+                        telefone: '',
+                        email: ''
+                    });
                 }
             }
             
-            if (csvData.length > 0) {
-                alert(`CSV carregado com sucesso! ${csvData.length} registros encontrados.`);
-            } else {
-                alert('Nenhum dado válido encontrado no CSV. Verifique o formato.');
-            }
+            console.log('CSV parseado:', csvData.length, 'registros');
         }
         
         function processData() {
+            console.log('processData chamado, csvData.length:', csvData.length);
+            
             // Se não tiver CSV carregado, tenta processar do textarea
             if (csvData.length === 0) {
                 const input = document.getElementById('inputIds').value.trim();
@@ -524,12 +538,14 @@
             const groupConfigs = [];
             let totalPercentage = 0;
             
+            let hasError = false;
             groupItems.forEach(item => {
                 const name = item.querySelector('.group-name').value.trim();
                 const percentage = parseFloat(item.querySelector('.group-percentage').value) || 0;
                 
                 if (!name) {
                     alert('Todos os grupos precisam ter um nome!');
+                    hasError = true;
                     return;
                 }
                 
@@ -537,10 +553,14 @@
                 totalPercentage += percentage;
             });
             
+            if (hasError) return;
+            
             if (Math.abs(totalPercentage - 100) > 0.01) {
                 alert(`A soma das porcentagens deve ser 100%. Atual: ${totalPercentage.toFixed(1)}%`);
                 return;
             }
+            
+            console.log('Configurações validadas, processando...');
             
             // Remove duplicatas por ID
             const uniqueData = [];
@@ -552,6 +572,8 @@
                     uniqueData.push(row);
                 }
             });
+            
+            console.log('Dados únicos:', uniqueData.length);
             
             // Embaralha
             const shuffled = shuffleArray(uniqueData);
@@ -572,6 +594,8 @@
                 startIndex += groupSize;
             });
             
+            console.log('Grupos criados:', Object.keys(groups));
+            
             // Atualiza estatísticas
             updateStats();
             
@@ -581,6 +605,8 @@
             // Mostra a seção de resultados
             document.getElementById('resultsSection').style.display = 'block';
             document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+            
+            console.log('Processamento concluído!');
         }
             const config = document.getElementById('groupConfig');
             const groupItem = document.createElement('div');
