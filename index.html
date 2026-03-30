@@ -388,7 +388,8 @@
             <div class="section">
                 <div class="section-title">Passo 2: Faça Upload do CSV</div>
                 <p style="color: #002559; font-size: 14px; margin-bottom: 10px;">
-                    Faça upload de um CSV com as colunas: <strong>id, telefone, email</strong>
+                    Faça upload de um CSV com as colunas: <strong>id, telefone, email</strong><br>
+                    <em>Opcionais: first_name, last_name, zip, city</em>
                 </p>
                 
                 <div style="margin-bottom: 15px;">
@@ -486,7 +487,35 @@
             const lines = text.trim().split('\n');
             csvData = [];
             
-            const startIndex = lines[0].toLowerCase().includes('id') ? 1 : 0;
+            // Lê o header para identificar as colunas
+            const headerLine = lines[0].toLowerCase();
+            const headers = headerLine.split(/[,;\t]/).map(h => h.trim().replace(/['"]/g, ''));
+            
+            // Mapeia os índices das colunas
+            const columnMap = {
+                id: headers.findIndex(h => h.includes('id') || h === 'customer_id'),
+                telefone: headers.findIndex(h => h.includes('telefone') || h.includes('phone')),
+                email: headers.findIndex(h => h.includes('email') || h.includes('mail')),
+                first_name: headers.findIndex(h => h.includes('first') || h.includes('nome')),
+                last_name: headers.findIndex(h => h.includes('last') || h.includes('sobrenome')),
+                zip: headers.findIndex(h => h.includes('zip') || h.includes('cep')),
+                city: headers.findIndex(h => h.includes('city') || h.includes('cidade'))
+            };
+            
+            // Se não encontrou header, assume ordem padrão
+            const hasHeader = columnMap.id >= 0;
+            const startIndex = hasHeader ? 1 : 0;
+            
+            // Se não tem header, assume ordem: id, telefone, email, first_name, last_name, zip, city
+            if (!hasHeader) {
+                columnMap.id = 0;
+                columnMap.telefone = 1;
+                columnMap.email = 2;
+                columnMap.first_name = 3;
+                columnMap.last_name = 4;
+                columnMap.zip = 5;
+                columnMap.city = 6;
+            }
             
             for (let i = startIndex; i < lines.length; i++) {
                 const line = lines[i].trim();
@@ -494,18 +523,19 @@
                 
                 const parts = line.split(/[,;\t]/).map(p => p.trim().replace(/['"]/g, ''));
                 
-                if (parts.length >= 3) {
-                    csvData.push({
-                        id: parts[0],
-                        telefone: parts[1],
-                        email: parts[2]
-                    });
-                } else if (parts.length === 1 && parts[0]) {
-                    csvData.push({
-                        id: parts[0],
-                        telefone: '',
-                        email: ''
-                    });
+                // Precisa ter pelo menos o ID
+                if (parts.length > 0 && parts[columnMap.id]) {
+                    const record = {
+                        id: parts[columnMap.id] || '',
+                        telefone: parts[columnMap.telefone] || '',
+                        email: parts[columnMap.email] || '',
+                        first_name: parts[columnMap.first_name] || '',
+                        last_name: parts[columnMap.last_name] || '',
+                        zip: parts[columnMap.zip] || '',
+                        city: parts[columnMap.city] || ''
+                    };
+                    
+                    csvData.push(record);
                 }
             }
         }
@@ -759,9 +789,29 @@ order by 1`;
         }
         
         function downloadCSV(groupName, records) {
-            let csvContent = 'id,telefone,email\n';
+            // Verifica quais colunas opcionais existem nos dados
+            const hasFirstName = records.some(r => r.first_name);
+            const hasLastName = records.some(r => r.last_name);
+            const hasZip = records.some(r => r.zip);
+            const hasCity = records.some(r => r.city);
+            
+            // Monta o header dinamicamente
+            let header = 'id,telefone,email';
+            if (hasFirstName) header += ',first_name';
+            if (hasLastName) header += ',last_name';
+            if (hasZip) header += ',zip';
+            if (hasCity) header += ',city';
+            header += '\n';
+            
+            let csvContent = header;
+            
             records.forEach(record => {
-                csvContent += `${record.id},${record.telefone},${record.email}\n`;
+                let row = `${record.id},${record.telefone},${record.email}`;
+                if (hasFirstName) row += `,${record.first_name}`;
+                if (hasLastName) row += `,${record.last_name}`;
+                if (hasZip) row += `,${record.zip}`;
+                if (hasCity) row += `,${record.city}`;
+                csvContent += row + '\n';
             });
             
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
