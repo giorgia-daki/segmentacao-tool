@@ -580,9 +580,9 @@
             try {
                 const url = `${APPS_SCRIPT_URL}?action=checkTestName&nome_teste=${encodeURIComponent(nome_teste)}`;
                 
-                // Timeout de 10 segundos
+                // Timeout de 30 segundos (Apps Script pode ser lento)
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                const timeoutId = setTimeout(() => controller.abort(), 30000);
                 
                 const response = await fetch(url, { signal: controller.signal });
                 clearTimeout(timeoutId);
@@ -593,7 +593,7 @@
                 if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
                     return { 
                         success: false, 
-                        error: 'Apps Script retornou HTML. Pode ser problema de permissão ou timeout.' 
+                        error: 'Apps Script retornou HTML. Pode ser problema de permissão.' 
                     };
                 }
                 
@@ -601,7 +601,7 @@
                 return result;
             } catch (error) {
                 if (error.name === 'AbortError') {
-                    return { success: false, error: 'Timeout: A requisição demorou muito (>10s)' };
+                    return { success: false, error: 'Timeout: Google Apps Script demorou mais de 30s. Tente novamente.' };
                 }
                 console.error('Erro ao verificar nome do teste:', error);
                 return { success: false, error: error.toString() };
@@ -692,7 +692,7 @@
                 const url = `${APPS_SCRIPT_URL}?action=getHistory`;
                 
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 15000);
+                const timeoutId = setTimeout(() => controller.abort(), 30000);
                 
                 const response = await fetch(url, { signal: controller.signal });
                 clearTimeout(timeoutId);
@@ -707,7 +707,7 @@
                 return result;
             } catch (error) {
                 if (error.name === 'AbortError') {
-                    return { success: false, error: 'Timeout ao buscar histórico' };
+                    return { success: false, error: 'Timeout ao buscar histórico (>30s)' };
                 }
                 console.error('Erro ao buscar histórico:', error);
                 return { success: false, error: error.toString() };
@@ -745,7 +745,7 @@
             }
             
             verifyBtn.disabled = true;
-            verifyBtn.textContent = 'Verificando...';
+            verifyBtn.textContent = 'Verificando... (pode demorar)';
             
             const result = await checkTestName(testName);
             
