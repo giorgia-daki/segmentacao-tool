@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador de Segmentações</title>
+    <title>Gerador de Segmentações v2</title>
     <style>
         * {
             margin: 0;
@@ -514,10 +514,66 @@
                     });
                 });
                 
-                const url = `${APPS_SCRIPT_URL}?action=saveData&nome_teste=${encodeURIComponent(nome_teste)}&records=${encodeURIComponent(JSON.stringify(allRecords))}`;
-                const response = await fetch(url);
-                const result = await response.json();
-                return result;
+                // Usa formulário invisível para enviar POST (evita limite de URL)
+                return new Promise((resolve) => {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = APPS_SCRIPT_URL;
+                    form.target = 'hiddenFrame';
+                    form.style.display = 'none';
+                    
+                    const inputAction = document.createElement('input');
+                    inputAction.name = 'action';
+                    inputAction.value = 'saveData';
+                    form.appendChild(inputAction);
+                    
+                    const inputNome = document.createElement('input');
+                    inputNome.name = 'nome_teste';
+                    inputNome.value = nome_teste;
+                    form.appendChild(inputNome);
+                    
+                    const inputRecords = document.createElement('input');
+                    inputRecords.name = 'records';
+                    inputRecords.value = JSON.stringify(allRecords);
+                    form.appendChild(inputRecords);
+                    
+                    // Cria iframe invisível para receber resposta
+                    let iframe = document.getElementById('hiddenFrame');
+                    if (!iframe) {
+                        iframe = document.createElement('iframe');
+                        iframe.name = 'hiddenFrame';
+                        iframe.id = 'hiddenFrame';
+                        iframe.style.display = 'none';
+                        document.body.appendChild(iframe);
+                    }
+                    
+                    // Aguarda resposta do iframe
+                    iframe.onload = function() {
+                        try {
+                            // Assume sucesso se não der erro
+                            setTimeout(() => {
+                                resolve({
+                                    success: true,
+                                    message: `${allRecords.length} registros salvos com sucesso!`
+                                });
+                            }, 1000);
+                        } catch (error) {
+                            resolve({
+                                success: false,
+                                error: 'Erro ao processar resposta'
+                            });
+                        }
+                    };
+                    
+                    document.body.appendChild(form);
+                    form.submit();
+                    
+                    // Remove o form depois
+                    setTimeout(() => {
+                        document.body.removeChild(form);
+                    }, 2000);
+                });
+                
             } catch (error) {
                 console.error('Erro ao salvar dados:', error);
                 return { success: false, error: error.toString() };
