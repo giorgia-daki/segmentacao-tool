@@ -341,9 +341,96 @@
         .group-result-item {
             margin-bottom: 20px;
         }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .loading-overlay.show {
+            display: flex;
+        }
+        
+        .loading-content {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            text-align: center;
+            min-width: 300px;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #E5F0FF;
+            border-top: 4px solid #0069FF;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .loading-text {
+            color: #000000;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        .loading-subtext {
+            color: #002559;
+            font-size: 13px;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #E6E6E6;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 15px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0069FF, #002559);
+            width: 0%;
+            transition: width 0.3s ease;
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { opacity: 0.8; }
+            50% { opacity: 1; }
+            100% { opacity: 0.8; }
+        }
     </style>
 </head>
 <body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-text" id="loadingText">Processando...</div>
+            <div class="loading-subtext" id="loadingSubtext">Aguarde um momento</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+    </div>
+    
     <div class="container">
         <div class="header">
             <h1>Gerador de Segmentações</h1>
@@ -594,6 +681,23 @@
         
         let testNameVerified = false;
         
+        function showLoading(text, subtext, progress = 0) {
+            const overlay = document.getElementById('loadingOverlay');
+            const loadingText = document.getElementById('loadingText');
+            const loadingSubtext = document.getElementById('loadingSubtext');
+            const progressFill = document.getElementById('progressFill');
+            
+            loadingText.textContent = text;
+            loadingSubtext.textContent = subtext;
+            progressFill.style.width = progress + '%';
+            overlay.classList.add('show');
+        }
+        
+        function hideLoading() {
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.classList.remove('show');
+        }
+        
         async function verifyTestName() {
             const testNameInput = document.getElementById('testName');
             const testName = testNameInput.value.trim();
@@ -608,8 +712,11 @@
             verifyBtn.disabled = true;
             verifyBtn.textContent = 'Verificando...';
             
+            showLoading('Verificando disponibilidade...', 'Consultando histórico de testes', 50);
+            
             const result = await checkTestName(testName);
             
+            hideLoading();
             verifyBtn.disabled = false;
             verifyBtn.textContent = 'Verificar Disponibilidade';
             
@@ -638,7 +745,11 @@
         }
         
         async function showHistory() {
+            showLoading('Carregando histórico...', 'Buscando testes anteriores', 30);
+            
             const result = await getHistory();
+            
+            hideLoading();
             
             if (!result.success) {
                 alert('Erro ao buscar histórico: ' + result.error);
@@ -729,21 +840,44 @@
             
             const saveBtn = document.getElementById('saveBtn');
             saveBtn.disabled = true;
-            saveBtn.textContent = '💾 Salvando...';
+            
+            // Calcula total de registros
+            const totalRecords = Object.values(groups).reduce((sum, arr) => sum + arr.length, 0);
+            
+            showLoading(
+                'Salvando no Google Sheets...', 
+                `Enviando ${totalRecords} registros para o histórico`,
+                20
+            );
+            
+            // Simula progresso
+            setTimeout(() => {
+                document.getElementById('progressFill').style.width = '50%';
+                document.getElementById('loadingSubtext').textContent = 'Processando dados...';
+            }, 500);
+            
+            setTimeout(() => {
+                document.getElementById('progressFill').style.width = '80%';
+                document.getElementById('loadingSubtext').textContent = 'Quase lá...';
+            }, 1500);
             
             const result = await saveToDatabase(testName);
             
-            saveBtn.disabled = false;
-            saveBtn.textContent = '💾 Salvar no Histórico';
+            document.getElementById('progressFill').style.width = '100%';
             
-            if (result.success) {
-                alert('✅ ' + result.message);
-                testNameVerified = false;
-                document.getElementById('testName').value = '';
-                document.getElementById('testNameFeedback').style.display = 'none';
-            } else {
-                alert('❌ Erro ao salvar: ' + result.error);
-            }
+            setTimeout(() => {
+                hideLoading();
+                saveBtn.disabled = false;
+                
+                if (result.success) {
+                    alert('✅ ' + result.message);
+                    testNameVerified = false;
+                    document.getElementById('testName').value = '';
+                    document.getElementById('testNameFeedback').style.display = 'none';
+                } else {
+                    alert('❌ Erro ao salvar: ' + result.error);
+                }
+            }, 500);
         }
         
         function handleFileUpload(event) {
@@ -885,7 +1019,11 @@
                 return;
             }
             
-            const groupItems = document.querySelectorAll('.group-item');
+            showLoading('Processando dados...', 'Dividindo em grupos', 30);
+            
+            // Usa setTimeout para permitir que o loading apareça
+            setTimeout(() => {
+                const groupItems = document.querySelectorAll('.group-item');
             const groupConfigs = [];
             let totalPercentage = 0;
             
@@ -904,12 +1042,19 @@
                 totalPercentage += percentage;
             });
             
-            if (hasError) return;
+            if (hasError) {
+                hideLoading();
+                return;
+            }
             
             if (Math.abs(totalPercentage - 100) > 0.01) {
+                hideLoading();
                 alert(`A soma das porcentagens deve ser 100%. Atual: ${totalPercentage.toFixed(1)}%`);
                 return;
             }
+            
+            document.getElementById('progressFill').style.width = '50%';
+            document.getElementById('loadingSubtext').textContent = 'Removendo duplicatas...';
             
             const uniqueData = [];
             const seenIds = new Set();
@@ -920,6 +1065,9 @@
                     uniqueData.push(row);
                 }
             });
+            
+            document.getElementById('progressFill').style.width = '70%';
+            document.getElementById('loadingSubtext').textContent = 'Embaralhando e dividindo...';
             
             const shuffled = shuffleArray(uniqueData);
             
@@ -938,12 +1086,22 @@
                 startIndex += groupSize;
             });
             
+            document.getElementById('progressFill').style.width = '90%';
+            document.getElementById('loadingSubtext').textContent = 'Gerando resultados...';
+            
             updateStats();
             generateResults();
             
-            document.getElementById('resultsSection').style.display = 'block';
-            document.getElementById('saveBtn').style.display = 'flex';
-            document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+            document.getElementById('progressFill').style.width = '100%';
+            
+            setTimeout(() => {
+                hideLoading();
+                document.getElementById('resultsSection').style.display = 'block';
+                document.getElementById('saveBtn').style.display = 'flex';
+                document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+            }, 300);
+            
+            }, 100);
         }
         
         function updateStats() {
