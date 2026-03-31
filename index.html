@@ -351,9 +351,31 @@
         </div>
         
         <div class="content">
+            <!-- Passo 0: Nome do Teste -->
+            <div class="section">
+                <div class="section-title">Passo 1: Nome do Teste</div>
+                <p style="color: #002559; font-size: 14px; margin-bottom: 10px;">
+                    Defina um nome único para este teste/segmentação
+                </p>
+                
+                <div style="display: flex; gap: 15px; align-items: flex-start; margin-bottom: 15px;">
+                    <input type="text" id="testName" placeholder="Ex: campanha_blackfriday_2026" 
+                           style="flex: 1; padding: 12px; border: 2px solid #E6E6E6; border-radius: 8px; font-size: 14px;">
+                    <button class="btn-secondary" onclick="verifyTestName()" id="verifyBtn">
+                        Verificar Disponibilidade
+                    </button>
+                </div>
+                
+                <div id="testNameFeedback" style="display: none; padding: 10px 15px; border-radius: 6px; font-size: 13px; margin-bottom: 15px;"></div>
+                
+                <button class="btn-secondary btn-small" onclick="showHistory()" style="margin-bottom: 10px;">
+                    📊 Ver Histórico de Testes
+                </button>
+            </div>
+            
             <!-- Passo 1: Configuração dos Grupos -->
             <div class="section">
-                <div class="section-title">Passo 1: Configure os Grupos</div>
+                <div class="section-title">Passo 2: Configure os Grupos</div>
                 <p style="color: #002559; font-size: 14px; margin-bottom: 15px;">
                     Defina quantos grupos quer criar e a porcentagem de cada um
                 </p>
@@ -386,7 +408,7 @@
 
             <!-- Passo 2: Input dos Dados -->
             <div class="section">
-                <div class="section-title">Passo 2: Faça Upload do CSV</div>
+                <div class="section-title">Passo 3: Faça Upload do CSV</div>
                 <p style="color: #002559; font-size: 14px; margin-bottom: 10px;">
                     Faça upload de um CSV com as colunas: <strong>id, telefone, email</strong><br>
                     <em>Opcionais: first_name, last_name, zip, city</em>
@@ -406,6 +428,9 @@
                     </button>
                     <button class="btn-secondary" onclick="clearAll()">
                         Limpar Tudo
+                    </button>
+                    <button class="btn-primary" onclick="saveToSheet()" id="saveBtn" style="display: none;">
+                        💾 Salvar no Histórico
                     </button>
                 </div>
             </div>
@@ -460,6 +485,210 @@
     <script>
         let groups = {};
         let csvData = [];
+        
+        // URL do Google Apps Script
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwp8alF1XxQJEy1zaXpNqTw8JMickNHbZSUjn4-hIlNY7qzUuM31RGaP0DEwDVXLyuM2w/exec';
+        
+        async function checkTestName(nome_teste) {
+            try {
+                const url = `${APPS_SCRIPT_URL}?action=checkTestName&nome_teste=${encodeURIComponent(nome_teste)}`;
+                const response = await fetch(url);
+                const result = await response.json();
+                return result;
+            } catch (error) {
+                console.error('Erro ao verificar nome do teste:', error);
+                return { success: false, error: error.toString() };
+            }
+        }
+        
+        async function saveToDatabase(nome_teste) {
+            try {
+                // Prepara todos os registros com seus grupos
+                const allRecords = [];
+                Object.entries(groups).forEach(([groupName, records]) => {
+                    records.forEach(record => {
+                        allRecords.push({
+                            ...record,
+                            grupo: groupName
+                        });
+                    });
+                });
+                
+                const url = `${APPS_SCRIPT_URL}?action=saveData&nome_teste=${encodeURIComponent(nome_teste)}&records=${encodeURIComponent(JSON.stringify(allRecords))}`;
+                const response = await fetch(url);
+                const result = await response.json();
+                return result;
+            } catch (error) {
+                console.error('Erro ao salvar dados:', error);
+                return { success: false, error: error.toString() };
+            }
+        }
+        
+        async function getHistory() {
+            try {
+                const url = `${APPS_SCRIPT_URL}?action=getHistory`;
+                const response = await fetch(url);
+                const result = await response.json();
+                return result;
+            } catch (error) {
+                console.error('Erro ao buscar histórico:', error);
+                return { success: false, error: error.toString() };
+            }
+        }
+        
+        let testNameVerified = false;
+        
+        async function verifyTestName() {
+            const testNameInput = document.getElementById('testName');
+            const testName = testNameInput.value.trim();
+            const feedback = document.getElementById('testNameFeedback');
+            const verifyBtn = document.getElementById('verifyBtn');
+            
+            if (!testName) {
+                alert('Por favor, digite um nome para o teste!');
+                return;
+            }
+            
+            verifyBtn.disabled = true;
+            verifyBtn.textContent = 'Verificando...';
+            
+            const result = await checkTestName(testName);
+            
+            verifyBtn.disabled = false;
+            verifyBtn.textContent = 'Verificar Disponibilidade';
+            
+            feedback.style.display = 'block';
+            
+            if (result.success) {
+                if (result.exists) {
+                    feedback.style.background = '#F2ABAB';
+                    feedback.style.border = '1px solid #EBB0DB';
+                    feedback.style.color = '#000000';
+                    feedback.textContent = '❌ Este nome já existe! Escolha outro nome.';
+                    testNameVerified = false;
+                } else {
+                    feedback.style.background = '#ACE5D0';
+                    feedback.style.border = '1px solid #C2EBA3';
+                    feedback.style.color = '#002559';
+                    feedback.textContent = '✅ Nome disponível! Pode continuar.';
+                    testNameVerified = true;
+                }
+            } else {
+                feedback.style.background = '#F2ABAB';
+                feedback.style.color = '#000000';
+                feedback.textContent = '❌ Erro ao verificar: ' + result.error;
+                testNameVerified = false;
+            }
+        }
+        
+        async function showHistory() {
+            const result = await getHistory();
+            
+            if (!result.success) {
+                alert('Erro ao buscar histórico: ' + result.error);
+                return;
+            }
+            
+            if (!result.tests || result.tests.length === 0) {
+                alert('Nenhum teste encontrado no histórico.');
+                return;
+            }
+            
+            // Cria modal com histórico
+            const modal = document.createElement('div');
+            modal.style.position = 'fixed';
+            modal.style.top = '0';
+            modal.style.left = '0';
+            modal.style.width = '100%';
+            modal.style.height = '100%';
+            modal.style.background = 'rgba(0,0,0,0.8)';
+            modal.style.display = 'flex';
+            modal.style.alignItems = 'center';
+            modal.style.justifyContent = 'center';
+            modal.style.zIndex = '10000';
+            modal.style.padding = '20px';
+            
+            const modalContent = document.createElement('div');
+            modalContent.style.background = 'white';
+            modalContent.style.padding = '30px';
+            modalContent.style.borderRadius = '12px';
+            modalContent.style.maxWidth = '800px';
+            modalContent.style.width = '100%';
+            modalContent.style.maxHeight = '80vh';
+            modalContent.style.overflow = 'auto';
+            
+            let html = '<h2 style="margin-bottom: 20px; color: #0069FF;">📊 Histórico de Testes</h2>';
+            
+            result.tests.forEach(test => {
+                const data = new Date(test.data_criacao).toLocaleDateString('pt-BR');
+                const grupos = Object.entries(test.grupos).map(([nome, qtd]) => `${nome}: ${qtd}`).join(', ');
+                
+                html += `
+                    <div style="background: #F2F2F2; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #0069FF;">
+                        <div style="font-weight: 600; font-size: 16px; color: #000000; margin-bottom: 8px;">${test.nome}</div>
+                        <div style="font-size: 13px; color: #002559;">
+                            <div>📅 Data: ${data}</div>
+                            <div>📊 Total: ${test.total_registros} registros</div>
+                            <div>👥 Grupos: ${grupos}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = 'Fechar';
+            closeBtn.style.marginTop = '20px';
+            closeBtn.style.padding = '10px 20px';
+            closeBtn.style.background = '#0069FF';
+            closeBtn.style.color = '#FFFFFF';
+            closeBtn.style.border = 'none';
+            closeBtn.style.borderRadius = '6px';
+            closeBtn.style.cursor = 'pointer';
+            closeBtn.style.fontWeight = '600';
+            closeBtn.onclick = () => document.body.removeChild(modal);
+            
+            modalContent.innerHTML = html;
+            modalContent.appendChild(closeBtn);
+            modal.appendChild(modalContent);
+            document.body.appendChild(modal);
+        }
+        
+        async function saveToSheet() {
+            const testName = document.getElementById('testName').value.trim();
+            
+            if (!testName) {
+                alert('Por favor, defina um nome para o teste primeiro!');
+                return;
+            }
+            
+            if (!testNameVerified) {
+                alert('Por favor, verifique a disponibilidade do nome do teste primeiro!');
+                return;
+            }
+            
+            if (Object.keys(groups).length === 0) {
+                alert('Por favor, processe os dados primeiro!');
+                return;
+            }
+            
+            const saveBtn = document.getElementById('saveBtn');
+            saveBtn.disabled = true;
+            saveBtn.textContent = '💾 Salvando...';
+            
+            const result = await saveToDatabase(testName);
+            
+            saveBtn.disabled = false;
+            saveBtn.textContent = '💾 Salvar no Histórico';
+            
+            if (result.success) {
+                alert('✅ ' + result.message);
+                testNameVerified = false;
+                document.getElementById('testName').value = '';
+                document.getElementById('testNameFeedback').style.display = 'none';
+            } else {
+                alert('❌ Erro ao salvar: ' + result.error);
+            }
+        }
         
         function handleFileUpload(event) {
             const file = event.target.files[0];
@@ -589,6 +818,17 @@
                 return;
             }
             
+            const testName = document.getElementById('testName').value.trim();
+            if (!testName) {
+                alert('Por favor, defina um nome para o teste primeiro!');
+                return;
+            }
+            
+            if (!testNameVerified) {
+                alert('Por favor, verifique a disponibilidade do nome do teste antes de processar!');
+                return;
+            }
+            
             const groupItems = document.querySelectorAll('.group-item');
             const groupConfigs = [];
             let totalPercentage = 0;
@@ -646,6 +886,7 @@
             generateResults();
             
             document.getElementById('resultsSection').style.display = 'block';
+            document.getElementById('saveBtn').style.display = 'flex';
             document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
         }
         
@@ -941,10 +1182,14 @@ order by 1`;
             if (confirm('Tem certeza que deseja limpar todos os dados?')) {
                 document.getElementById('csvFile').value = '';
                 document.getElementById('fileName').textContent = '';
+                document.getElementById('testName').value = '';
+                document.getElementById('testNameFeedback').style.display = 'none';
                 document.getElementById('statsContainer').style.display = 'none';
                 document.getElementById('resultsSection').style.display = 'none';
+                document.getElementById('saveBtn').style.display = 'none';
                 groups = {};
                 csvData = [];
+                testNameVerified = false;
             }
         }
     </script>
