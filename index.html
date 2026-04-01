@@ -417,24 +417,7 @@
             100% { opacity: 0.8; }
         }
 
-        /* Supabase config banner */
-        .config-banner {
-            background: #FFF8E1;
-            border: 2px solid #FFD54F;
-            border-radius: 8px;
-            padding: 15px 20px;
-            margin-bottom: 25px;
-            font-size: 13px;
-            color: #5D4037;
-        }
-        .config-banner strong { color: #E65100; }
-        .config-banner code {
-            background: #FFF3E0;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 12px;
-        }
+
     </style>
 </head>
 <body>
@@ -458,19 +441,6 @@
         
         <div class="content">
 
-            <!-- Banner de configuração Supabase -->
-            <div class="config-banner" id="configBanner">
-                ⚙️ <strong>Configuração necessária:</strong> Substitua <code>SUPABASE_URL</code> e <code>SUPABASE_SERVICE_KEY</code> 
-                no topo do script pelas suas credenciais do painel 
-                <strong>Supabase → Settings → API</strong>. 
-                Crie também a tabela <code>segmentacoes</code> conforme o README.
-                <br><br>
-                <strong>SQL para criar a tabela:</strong><br>
-                <code>
-                    create table segmentacoes (id uuid default gen_random_uuid() primary key, nome_teste text not null, customer_id text not null, telefone text, email text, first_name text, last_name text, zip text, city text, grupo text not null, criado_em timestamptz default now());
-                    create index idx_segmentacoes_nome_teste on segmentacoes(nome_teste);
-                </code>
-            </div>
 
             <!-- Passo 1: Nome do Teste -->
             <div class="section">
@@ -603,8 +573,8 @@
         // ============================================================
         // CONFIGURAÇÃO SUPABASE — substitua pelos seus valores reais
         // ============================================================
-        const SUPABASE_URL     = 'https://mriyilqazcwsetrnazsb.supabase.co';
-        const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yaXlpbHFhemN3c2V0cm5henNiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTA2ODA3NiwiZXhwIjoyMDkwNjQ0MDc2fQ.9N85U5yJlXBZiZfCY856XGDm-hIJMQ3AC2VGc6PU1Pc'; // Settings → API → service_role
+        const SUPABASE_URL     = 'https://SEU_PROJECT_ID.supabase.co';
+        const SUPABASE_SERVICE_KEY = 'SEU_SERVICE_ROLE_KEY'; // Settings → API → service_role
         // ============================================================
 
         // Tamanho máximo por batch no insert (Supabase aceita até ~1000 linhas por request)
