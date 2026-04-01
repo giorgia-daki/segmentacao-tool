@@ -416,6 +416,25 @@
             50% { opacity: 1; }
             100% { opacity: 0.8; }
         }
+
+        /* Supabase config banner */
+        .config-banner {
+            background: #FFF8E1;
+            border: 2px solid #FFD54F;
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin-bottom: 25px;
+            font-size: 13px;
+            color: #5D4037;
+        }
+        .config-banner strong { color: #E65100; }
+        .config-banner code {
+            background: #FFF3E0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -438,7 +457,22 @@
         </div>
         
         <div class="content">
-            <!-- Passo 0: Nome do Teste -->
+
+            <!-- Banner de configuração Supabase -->
+            <div class="config-banner" id="configBanner">
+                ⚙️ <strong>Configuração necessária:</strong> Substitua <code>SUPABASE_URL</code> e <code>SUPABASE_SERVICE_KEY</code> 
+                no topo do script pelas suas credenciais do painel 
+                <strong>Supabase → Settings → API</strong>. 
+                Crie também a tabela <code>segmentacoes</code> conforme o README.
+                <br><br>
+                <strong>SQL para criar a tabela:</strong><br>
+                <code>
+                    create table segmentacoes (id uuid default gen_random_uuid() primary key, nome_teste text not null, customer_id text not null, telefone text, email text, first_name text, last_name text, zip text, city text, grupo text not null, criado_em timestamptz default now());
+                    create index idx_segmentacoes_nome_teste on segmentacoes(nome_teste);
+                </code>
+            </div>
+
+            <!-- Passo 1: Nome do Teste -->
             <div class="section">
                 <div class="section-title">Passo 1: Nome do Teste</div>
                 <p style="color: #002559; font-size: 14px; margin-bottom: 10px;">
@@ -460,7 +494,7 @@
                 </button>
             </div>
             
-            <!-- Passo 1: Configuração dos Grupos -->
+            <!-- Passo 2: Configuração dos Grupos -->
             <div class="section">
                 <div class="section-title">Passo 2: Configure os Grupos</div>
                 <p style="color: #002559; font-size: 14px; margin-bottom: 15px;">
@@ -493,7 +527,7 @@
                 </div>
             </div>
 
-            <!-- Passo 2: Input dos Dados -->
+            <!-- Passo 3: Upload CSV -->
             <div class="section">
                 <div class="section-title">Passo 3: Faça Upload do CSV</div>
                 <p style="color: #002559; font-size: 14px; margin-bottom: 10px;">
@@ -516,15 +550,14 @@
                     <button class="btn-secondary" onclick="clearAll()">
                         Limpar Tudo
                     </button>
-                    <button class="btn-primary" onclick="saveToSheet()" id="saveBtn" style="display: none;">
+                    <button class="btn-primary" onclick="saveToSupabase()" id="saveBtn" style="display: none;">
                         💾 Salvar no Histórico
                     </button>
                 </div>
             </div>
             
             <!-- Stats -->
-            <div class="stats" id="statsContainer" style="display: none;">
-            </div>
+            <div class="stats" id="statsContainer" style="display: none;"></div>
             
             <!-- Results -->
             <div id="resultsSection" style="display: none;">
@@ -535,12 +568,10 @@
                         <button class="tab" onclick="switchTab('csv')">Export CSVs</button>
                     </div>
                     
-                    <!-- Tab: IDs Formatados -->
                     <div id="tab-formatted" class="tab-content active">
                         <div id="formattedResults"></div>
                     </div>
                     
-                    <!-- Tab: Query Completa -->
                     <div id="tab-query" class="tab-content">
                         <div class="alert success">
                             Query pronta! Os IDs já estão inseridos nos lugares corretos.
@@ -556,7 +587,6 @@
                         </div>
                     </div>
                     
-                    <!-- Tab: CSV Export -->
                     <div id="tab-csv" class="tab-content">
                         <div class="section-title">Download CSVs por Grupo</div>
                         <p style="color: #002559; font-size: 14px; margin-bottom: 15px;">
@@ -570,337 +600,281 @@
     </div>
 
     <script>
+        // ============================================================
+        // CONFIGURAÇÃO SUPABASE — substitua pelos seus valores reais
+        // ============================================================
+        const SUPABASE_URL     = 'https://mriyilqazcwsetrnazsb.supabase.co';
+        const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1yaXlpbHFhemN3c2V0cm5henNiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTA2ODA3NiwiZXhwIjoyMDkwNjQ0MDc2fQ.9N85U5yJlXBZiZfCY856XGDm-hIJMQ3AC2VGc6PU1Pc'; // Settings → API → service_role
+        // ============================================================
+
+        // Tamanho máximo por batch no insert (Supabase aceita até ~1000 linhas por request)
+        const BATCH_SIZE = 500;
+
         let groups = {};
         let csvData = [];
-        
-        // URL do Google Apps Script
-        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwp8alF1XxQJEy1zaXpNqTw8JMickNHbZSUjn4-hIlNY7qzUuM31RGaP0DEwDVXLyuM2w/exec';
-        
+        let testNameVerified = false;
+
+        // ── Helpers de fetch ─────────────────────────────────────────
+
+        function supabaseHeaders() {
+            return {
+                'Content-Type': 'application/json',
+                'apikey': SUPABASE_SERVICE_KEY,
+                'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+                'Prefer': 'return=minimal'  // não retorna linhas inseridas (mais rápido)
+            };
+        }
+
+        // Divide array em chunks de tamanho n
+        function chunkArray(array, n) {
+            const chunks = [];
+            for (let i = 0; i < array.length; i += n) {
+                chunks.push(array.slice(i, i + n));
+            }
+            return chunks;
+        }
+
+        // ── 1. Verificar se nome_teste já existe ─────────────────────
+
         async function checkTestName(nome_teste) {
             try {
-                const url = `${APPS_SCRIPT_URL}?action=checkTestName&nome_teste=${encodeURIComponent(nome_teste)}`;
-                
-                // Timeout de 30 segundos (Apps Script pode ser lento)
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 30000);
-                
-                const response = await fetch(url, { signal: controller.signal });
-                clearTimeout(timeoutId);
-                
-                const text = await response.text();
-                
-                // Verifica se é HTML (erro)
-                if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
-                    return { 
-                        success: false, 
-                        error: 'Apps Script retornou HTML. Pode ser problema de permissão.' 
-                    };
+                const url = `${SUPABASE_URL}/rest/v1/segmentacoes?nome_teste=eq.${encodeURIComponent(nome_teste)}&select=nome_teste&limit=1`;
+                const res = await fetch(url, {
+                    headers: {
+                        'apikey': SUPABASE_SERVICE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`
+                    }
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    return { success: false, error: err.message || `HTTP ${res.status}` };
                 }
-                
-                const result = JSON.parse(text);
-                return result;
+
+                const data = await res.json();
+                return { success: true, exists: data.length > 0 };
+
             } catch (error) {
-                if (error.name === 'AbortError') {
-                    return { success: false, error: 'Timeout: Google Apps Script demorou mais de 30s. Tente novamente.' };
-                }
-                console.error('Erro ao verificar nome do teste:', error);
+                console.error('[checkTestName]', error);
                 return { success: false, error: error.toString() };
             }
         }
-        
+
+        // ── 2. Salvar registros (batch insert) ───────────────────────
+
         async function saveToDatabase(nome_teste) {
             try {
-                // Prepara todos os registros com seus grupos
+                // Monta array de registros com grupo
                 const allRecords = [];
                 Object.entries(groups).forEach(([groupName, records]) => {
                     records.forEach(record => {
                         allRecords.push({
-                            ...record,
-                            grupo: groupName
+                            nome_teste,
+                            customer_id: record.id,
+                            telefone:    record.telefone   || null,
+                            email:       record.email      || null,
+                            first_name:  record.first_name || null,
+                            last_name:   record.last_name  || null,
+                            zip:         record.zip        || null,
+                            city:        record.city       || null,
+                            grupo:       groupName
                         });
                     });
                 });
-                
-                // Usa formulário invisível para enviar POST (evita limite de URL)
-                return new Promise((resolve) => {
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = APPS_SCRIPT_URL;
-                    form.target = 'hiddenFrame';
-                    form.style.display = 'none';
-                    
-                    const inputAction = document.createElement('input');
-                    inputAction.name = 'action';
-                    inputAction.value = 'saveData';
-                    form.appendChild(inputAction);
-                    
-                    const inputNome = document.createElement('input');
-                    inputNome.name = 'nome_teste';
-                    inputNome.value = nome_teste;
-                    form.appendChild(inputNome);
-                    
-                    const inputRecords = document.createElement('input');
-                    inputRecords.name = 'records';
-                    inputRecords.value = JSON.stringify(allRecords);
-                    form.appendChild(inputRecords);
-                    
-                    // Cria iframe invisível para receber resposta
-                    let iframe = document.getElementById('hiddenFrame');
-                    if (!iframe) {
-                        iframe = document.createElement('iframe');
-                        iframe.name = 'hiddenFrame';
-                        iframe.id = 'hiddenFrame';
-                        iframe.style.display = 'none';
-                        document.body.appendChild(iframe);
+
+                // Envia em batches para não exceder limites da API
+                const batches = chunkArray(allRecords, BATCH_SIZE);
+                let inserted = 0;
+
+                for (let i = 0; i < batches.length; i++) {
+                    // Atualiza progresso visual
+                    const pct = 20 + Math.round(((i + 1) / batches.length) * 70);
+                    document.getElementById('progressFill').style.width = pct + '%';
+                    document.getElementById('loadingSubtext').textContent =
+                        `Enviando batch ${i + 1}/${batches.length} (${inserted + batches[i].length} registros)...`;
+
+                    const res = await fetch(`${SUPABASE_URL}/rest/v1/segmentacoes`, {
+                        method: 'POST',
+                        headers: supabaseHeaders(),
+                        body: JSON.stringify(batches[i])
+                    });
+
+                    if (!res.ok) {
+                        const err = await res.json();
+                        return { success: false, error: err.message || `HTTP ${res.status} no batch ${i + 1}` };
                     }
-                    
-                    // Aguarda resposta do iframe
-                    iframe.onload = function() {
-                        try {
-                            // Assume sucesso se não der erro
-                            setTimeout(() => {
-                                resolve({
-                                    success: true,
-                                    message: `${allRecords.length} registros salvos com sucesso!`
-                                });
-                            }, 1000);
-                        } catch (error) {
-                            resolve({
-                                success: false,
-                                error: 'Erro ao processar resposta'
-                            });
-                        }
-                    };
-                    
-                    document.body.appendChild(form);
-                    form.submit();
-                    
-                    // Remove o form depois
-                    setTimeout(() => {
-                        document.body.removeChild(form);
-                    }, 2000);
-                });
-                
+
+                    inserted += batches[i].length;
+                }
+
+                return { success: true, message: `${inserted} registros salvos com sucesso!` };
+
             } catch (error) {
-                console.error('Erro ao salvar dados:', error);
+                console.error('[saveToDatabase]', error);
                 return { success: false, error: error.toString() };
             }
         }
-        
+
+        // ── 3. Buscar histórico ──────────────────────────────────────
+
         async function getHistory() {
             try {
-                const url = `${APPS_SCRIPT_URL}?action=getHistory`;
-                
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 30000);
-                
-                const response = await fetch(url, { signal: controller.signal });
-                clearTimeout(timeoutId);
-                
-                const text = await response.text();
-                
-                if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
-                    return { success: false, error: 'Apps Script retornou HTML' };
+                // Busca todos os registros agrupados por nome_teste (side-step: sem GROUP BY nativo via REST)
+                // Estratégia: traz só nome_teste + grupo + criado_em e agrupa no client
+                const url = `${SUPABASE_URL}/rest/v1/segmentacoes?select=nome_teste,grupo,criado_em&order=criado_em.desc&limit=5000`;
+                const res = await fetch(url, {
+                    headers: {
+                        'apikey': SUPABASE_SERVICE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`
+                    }
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    return { success: false, error: err.message || `HTTP ${res.status}` };
                 }
-                
-                const result = JSON.parse(text);
-                return result;
+
+                const rows = await res.json();
+
+                // Agrupa no client
+                const testsMap = {};
+                rows.forEach(row => {
+                    if (!testsMap[row.nome_teste]) {
+                        testsMap[row.nome_teste] = {
+                            nome: row.nome_teste,
+                            data_criacao: row.criado_em,
+                            total_registros: 0,
+                            grupos: {}
+                        };
+                    }
+                    const t = testsMap[row.nome_teste];
+                    t.total_registros++;
+                    t.grupos[row.grupo] = (t.grupos[row.grupo] || 0) + 1;
+                });
+
+                const tests = Object.values(testsMap).sort(
+                    (a, b) => new Date(b.data_criacao) - new Date(a.data_criacao)
+                );
+
+                return { success: true, tests };
+
             } catch (error) {
-                if (error.name === 'AbortError') {
-                    return { success: false, error: 'Timeout ao buscar histórico (>30s)' };
-                }
-                console.error('Erro ao buscar histórico:', error);
+                console.error('[getHistory]', error);
                 return { success: false, error: error.toString() };
             }
         }
-        
-        let testNameVerified = false;
-        
+
+        // ── UI helpers ───────────────────────────────────────────────
+
         function showLoading(text, subtext, progress = 0) {
-            const overlay = document.getElementById('loadingOverlay');
-            const loadingText = document.getElementById('loadingText');
-            const loadingSubtext = document.getElementById('loadingSubtext');
-            const progressFill = document.getElementById('progressFill');
-            
-            loadingText.textContent = text;
-            loadingSubtext.textContent = subtext;
-            progressFill.style.width = progress + '%';
-            overlay.classList.add('show');
+            document.getElementById('loadingText').textContent    = text;
+            document.getElementById('loadingSubtext').textContent = subtext;
+            document.getElementById('progressFill').style.width   = progress + '%';
+            document.getElementById('loadingOverlay').classList.add('show');
         }
-        
+
         function hideLoading() {
-            const overlay = document.getElementById('loadingOverlay');
-            overlay.classList.remove('show');
+            document.getElementById('loadingOverlay').classList.remove('show');
         }
-        
+
+        // ── Verificar nome do teste ──────────────────────────────────
+
         async function verifyTestName() {
-            const testNameInput = document.getElementById('testName');
-            const testName = testNameInput.value.trim();
+            const testName = document.getElementById('testName').value.trim();
             const feedback = document.getElementById('testNameFeedback');
             const verifyBtn = document.getElementById('verifyBtn');
-            
-            if (!testName) {
-                alert('Por favor, digite um nome para o teste!');
-                return;
-            }
-            
+
+            if (!testName) { alert('Por favor, digite um nome para o teste!'); return; }
+
             verifyBtn.disabled = true;
-            verifyBtn.textContent = 'Verificando... (pode demorar)';
-            
+            verifyBtn.textContent = 'Verificando...';
+
             const result = await checkTestName(testName);
-            
+
             verifyBtn.disabled = false;
             verifyBtn.textContent = 'Verificar Disponibilidade';
-            
             feedback.style.display = 'block';
-            
+
             if (result.success) {
                 if (result.exists) {
-                    feedback.style.background = '#F2ABAB';
-                    feedback.style.border = '1px solid #EBB0DB';
-                    feedback.style.color = '#000000';
+                    feedback.style.cssText = 'display:block; background:#F2ABAB; border:1px solid #EBB0DB; color:#000; padding:10px 15px; border-radius:6px; font-size:13px; margin-bottom:15px;';
                     feedback.textContent = '❌ Este nome já existe! Escolha outro nome.';
                     testNameVerified = false;
                 } else {
-                    feedback.style.background = '#ACE5D0';
-                    feedback.style.border = '1px solid #C2EBA3';
-                    feedback.style.color = '#002559';
+                    feedback.style.cssText = 'display:block; background:#ACE5D0; border:1px solid #C2EBA3; color:#002559; padding:10px 15px; border-radius:6px; font-size:13px; margin-bottom:15px;';
                     feedback.textContent = '✅ Nome disponível! Pode continuar.';
                     testNameVerified = true;
                 }
             } else {
-                feedback.style.background = '#F2ABAB';
-                feedback.style.color = '#000000';
+                feedback.style.cssText = 'display:block; background:#F2ABAB; color:#000; padding:10px 15px; border-radius:6px; font-size:13px; margin-bottom:15px;';
                 feedback.textContent = '❌ Erro ao verificar: ' + result.error;
                 testNameVerified = false;
             }
         }
-        
+
+        // ── Histórico ────────────────────────────────────────────────
+
         async function showHistory() {
-            showLoading('Carregando histórico...', 'Buscando testes anteriores', 30);
-            
+            showLoading('Carregando histórico...', 'Buscando testes anteriores no Supabase', 30);
             const result = await getHistory();
-            
             hideLoading();
-            
-            if (!result.success) {
-                alert('Erro ao buscar histórico: ' + result.error);
-                return;
-            }
-            
-            if (!result.tests || result.tests.length === 0) {
-                alert('Nenhum teste encontrado no histórico.');
-                return;
-            }
-            
-            // Cria modal com histórico
+
+            if (!result.success) { alert('Erro ao buscar histórico: ' + result.error); return; }
+            if (!result.tests || result.tests.length === 0) { alert('Nenhum teste encontrado no histórico.'); return; }
+
             const modal = document.createElement('div');
-            modal.style.position = 'fixed';
-            modal.style.top = '0';
-            modal.style.left = '0';
-            modal.style.width = '100%';
-            modal.style.height = '100%';
-            modal.style.background = 'rgba(0,0,0,0.8)';
-            modal.style.display = 'flex';
-            modal.style.alignItems = 'center';
-            modal.style.justifyContent = 'center';
-            modal.style.zIndex = '10000';
-            modal.style.padding = '20px';
-            
+            modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:10000;padding:20px;';
+
             const modalContent = document.createElement('div');
-            modalContent.style.background = 'white';
-            modalContent.style.padding = '30px';
-            modalContent.style.borderRadius = '12px';
-            modalContent.style.maxWidth = '800px';
-            modalContent.style.width = '100%';
-            modalContent.style.maxHeight = '80vh';
-            modalContent.style.overflow = 'auto';
-            
-            let html = '<h2 style="margin-bottom: 20px; color: #0069FF;">📊 Histórico de Testes</h2>';
-            
+            modalContent.style.cssText = 'background:white;padding:30px;border-radius:12px;max-width:800px;width:100%;max-height:80vh;overflow:auto;';
+
+            let html = '<h2 style="margin-bottom:20px;color:#0069FF;">📊 Histórico de Testes (Supabase)</h2>';
             result.tests.forEach(test => {
                 const data = new Date(test.data_criacao).toLocaleDateString('pt-BR');
-                const grupos = Object.entries(test.grupos).map(([nome, qtd]) => `${nome}: ${qtd}`).join(', ');
-                
+                const grupos = Object.entries(test.grupos).map(([n, q]) => `${n}: ${q}`).join(', ');
                 html += `
-                    <div style="background: #F2F2F2; padding: 15px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #0069FF;">
-                        <div style="font-weight: 600; font-size: 16px; color: #000000; margin-bottom: 8px;">${test.nome}</div>
-                        <div style="font-size: 13px; color: #002559;">
+                    <div style="background:#F2F2F2;padding:15px;border-radius:8px;margin-bottom:15px;border-left:4px solid #0069FF;">
+                        <div style="font-weight:600;font-size:16px;color:#000;margin-bottom:8px;">${test.nome}</div>
+                        <div style="font-size:13px;color:#002559;">
                             <div>📅 Data: ${data}</div>
                             <div>📊 Total: ${test.total_registros} registros</div>
                             <div>👥 Grupos: ${grupos}</div>
                         </div>
-                    </div>
-                `;
+                    </div>`;
             });
-            
+
             const closeBtn = document.createElement('button');
             closeBtn.textContent = 'Fechar';
-            closeBtn.style.marginTop = '20px';
-            closeBtn.style.padding = '10px 20px';
-            closeBtn.style.background = '#0069FF';
-            closeBtn.style.color = '#FFFFFF';
-            closeBtn.style.border = 'none';
-            closeBtn.style.borderRadius = '6px';
-            closeBtn.style.cursor = 'pointer';
-            closeBtn.style.fontWeight = '600';
+            closeBtn.style.cssText = 'margin-top:20px;padding:10px 20px;background:#0069FF;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;';
             closeBtn.onclick = () => document.body.removeChild(modal);
-            
+
             modalContent.innerHTML = html;
             modalContent.appendChild(closeBtn);
             modal.appendChild(modalContent);
             document.body.appendChild(modal);
         }
-        
-        async function saveToSheet() {
+
+        // ── Salvar no Supabase ───────────────────────────────────────
+
+        async function saveToSupabase() {
             const testName = document.getElementById('testName').value.trim();
-            
-            if (!testName) {
-                alert('Por favor, defina um nome para o teste primeiro!');
-                return;
-            }
-            
-            if (!testNameVerified) {
-                alert('Por favor, verifique a disponibilidade do nome do teste primeiro!');
-                return;
-            }
-            
-            if (Object.keys(groups).length === 0) {
-                alert('Por favor, processe os dados primeiro!');
-                return;
-            }
-            
+            if (!testName)          { alert('Por favor, defina um nome para o teste primeiro!'); return; }
+            if (!testNameVerified)  { alert('Por favor, verifique a disponibilidade do nome do teste primeiro!'); return; }
+            if (!Object.keys(groups).length) { alert('Por favor, processe os dados primeiro!'); return; }
+
             const saveBtn = document.getElementById('saveBtn');
             saveBtn.disabled = true;
-            
-            // Calcula total de registros
-            const totalRecords = Object.values(groups).reduce((sum, arr) => sum + arr.length, 0);
-            
-            showLoading(
-                'Salvando no Google Sheets...', 
-                `Enviando ${totalRecords} registros para o histórico`,
-                20
-            );
-            
-            // Simula progresso
-            setTimeout(() => {
-                document.getElementById('progressFill').style.width = '50%';
-                document.getElementById('loadingSubtext').textContent = 'Processando dados...';
-            }, 500);
-            
-            setTimeout(() => {
-                document.getElementById('progressFill').style.width = '80%';
-                document.getElementById('loadingSubtext').textContent = 'Quase lá...';
-            }, 1500);
-            
+
+            const totalRecords = Object.values(groups).reduce((s, a) => s + a.length, 0);
+            showLoading('Salvando no Supabase...', `Enviando ${totalRecords} registros`, 10);
+
             const result = await saveToDatabase(testName);
-            
+
             document.getElementById('progressFill').style.width = '100%';
-            
+
             setTimeout(() => {
                 hideLoading();
                 saveBtn.disabled = false;
-                
                 if (result.success) {
                     alert('✅ ' + result.message);
                     testNameVerified = false;
@@ -909,303 +883,219 @@
                 } else {
                     alert('❌ Erro ao salvar: ' + result.error);
                 }
-            }, 500);
+            }, 400);
         }
-        
+
+        // ── CSV parsing ──────────────────────────────────────────────
+
         function handleFileUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
-            
+
             const fileNameDiv = document.getElementById('fileName');
             fileNameDiv.textContent = `Carregando ${file.name}...`;
             fileNameDiv.style.color = '#0069FF';
-            
+
             const reader = new FileReader();
-            reader.onload = function(e) {
-                const text = e.target.result;
-                parseCSV(text);
-                fileNameDiv.textContent = `✓ ${file.name} - ${csvData.length} registros carregados`;
+            reader.onload = e => {
+                parseCSV(e.target.result);
+                fileNameDiv.textContent = `✓ ${file.name} — ${csvData.length} registros carregados`;
                 fileNameDiv.style.color = '#002559';
             };
-            reader.onerror = function() {
-                fileNameDiv.textContent = `✗ Erro ao ler o arquivo`;
+            reader.onerror = () => {
+                fileNameDiv.textContent = '✗ Erro ao ler o arquivo';
                 fileNameDiv.style.color = '#F2ABAB';
             };
             reader.readAsText(file);
         }
-        
+
         function parseCSV(text) {
             const lines = text.trim().split('\n');
             csvData = [];
-            
-            // Lê o header para identificar as colunas
-            const headerLine = lines[0].toLowerCase();
-            const headers = headerLine.split(/[,;\t]/).map(h => h.trim().replace(/['"]/g, ''));
-            
-            // Mapeia os índices das colunas
-            const columnMap = {
-                id: headers.findIndex(h => h.includes('id') || h === 'customer_id'),
-                telefone: headers.findIndex(h => h.includes('telefone') || h.includes('phone')),
-                email: headers.findIndex(h => h.includes('email') || h.includes('mail')),
+
+            const headers = lines[0].toLowerCase().split(/[,;\t]/).map(h => h.trim().replace(/['"]/g, ''));
+            const col = {
+                id:         headers.findIndex(h => h.includes('id') || h === 'customer_id'),
+                telefone:   headers.findIndex(h => h.includes('telefone') || h.includes('phone')),
+                email:      headers.findIndex(h => h.includes('email') || h.includes('mail')),
                 first_name: headers.findIndex(h => h.includes('first') || h.includes('nome')),
-                last_name: headers.findIndex(h => h.includes('last') || h.includes('sobrenome')),
-                zip: headers.findIndex(h => h.includes('zip') || h.includes('cep')),
-                city: headers.findIndex(h => h.includes('city') || h.includes('cidade'))
+                last_name:  headers.findIndex(h => h.includes('last') || h.includes('sobrenome')),
+                zip:        headers.findIndex(h => h.includes('zip') || h.includes('cep')),
+                city:       headers.findIndex(h => h.includes('city') || h.includes('cidade'))
             };
-            
-            // Se não encontrou header, assume ordem padrão
-            const hasHeader = columnMap.id >= 0;
-            const startIndex = hasHeader ? 1 : 0;
-            
-            // Se não tem header, assume ordem: id, telefone, email, first_name, last_name, zip, city
-            if (!hasHeader) {
-                columnMap.id = 0;
-                columnMap.telefone = 1;
-                columnMap.email = 2;
-                columnMap.first_name = 3;
-                columnMap.last_name = 4;
-                columnMap.zip = 5;
-                columnMap.city = 6;
-            }
-            
-            for (let i = startIndex; i < lines.length; i++) {
+
+            const hasHeader = col.id >= 0;
+            if (!hasHeader) { col.id=0; col.telefone=1; col.email=2; col.first_name=3; col.last_name=4; col.zip=5; col.city=6; }
+
+            for (let i = hasHeader ? 1 : 0; i < lines.length; i++) {
                 const line = lines[i].trim();
                 if (!line) continue;
-                
-                const parts = line.split(/[,;\t]/).map(p => p.trim().replace(/['"]/g, ''));
-                
-                // Precisa ter pelo menos o ID
-                if (parts.length > 0 && parts[columnMap.id]) {
-                    const record = {
-                        id: parts[columnMap.id] || '',
-                        telefone: parts[columnMap.telefone] || '',
-                        email: parts[columnMap.email] || '',
-                        first_name: parts[columnMap.first_name] || '',
-                        last_name: parts[columnMap.last_name] || '',
-                        zip: parts[columnMap.zip] || '',
-                        city: parts[columnMap.city] || ''
-                    };
-                    
-                    csvData.push(record);
+                const p = line.split(/[,;\t]/).map(v => v.trim().replace(/['"]/g, ''));
+                if (p[col.id]) {
+                    csvData.push({
+                        id:         p[col.id]         || '',
+                        telefone:   p[col.telefone]   || '',
+                        email:      p[col.email]       || '',
+                        first_name: p[col.first_name]  || '',
+                        last_name:  p[col.last_name]   || '',
+                        zip:        p[col.zip]         || '',
+                        city:       p[col.city]        || ''
+                    });
                 }
             }
         }
-        
+
+        // ── Grupos ───────────────────────────────────────────────────
+
         function addGroup() {
             const config = document.getElementById('groupConfig');
-            const groupItem = document.createElement('div');
-            groupItem.className = 'group-item';
-            groupItem.innerHTML = `
+            const item = document.createElement('div');
+            item.className = 'group-item';
+            item.innerHTML = `
                 <label>Nome:</label>
                 <input type="text" class="group-name" value="grupo_${config.children.length + 1}" placeholder="Ex: grupo_3">
                 <label>%:</label>
                 <input type="number" class="group-percentage" value="0" min="0" max="100">
-                <span class="remove-group-btn" onclick="removeGroup(this)">✕</span>
-            `;
-            config.appendChild(groupItem);
+                <span class="remove-group-btn" onclick="removeGroup(this)">✕</span>`;
+            config.appendChild(item);
             updatePercentageWarning();
         }
-        
+
         function removeGroup(btn) {
-            const groupItem = btn.parentElement;
             const config = document.getElementById('groupConfig');
-            if (config.children.length > 1) {
-                groupItem.remove();
-                updatePercentageWarning();
-            }
+            if (config.children.length > 1) { btn.parentElement.remove(); updatePercentageWarning(); }
         }
-        
+
         function updatePercentageWarning() {
-            const percentages = Array.from(document.querySelectorAll('.group-percentage')).map(input => parseFloat(input.value) || 0);
-            const total = percentages.reduce((a, b) => a + b, 0);
-            const warning = document.getElementById('percentageWarning');
-            
+            const total = Array.from(document.querySelectorAll('.group-percentage'))
+                .reduce((s, i) => s + (parseFloat(i.value) || 0), 0);
+            const w = document.getElementById('percentageWarning');
             if (Math.abs(total - 100) > 0.01) {
-                warning.classList.add('show');
-                warning.textContent = `A soma das porcentagens é ${total.toFixed(1)}% (deve ser 100%)`;
+                w.classList.add('show');
+                w.textContent = `A soma das porcentagens é ${total.toFixed(1)}% (deve ser 100%)`;
             } else {
-                warning.classList.remove('show');
+                w.classList.remove('show');
             }
         }
-        
-        document.addEventListener('input', (e) => {
-            if (e.target.classList.contains('group-percentage')) {
-                updatePercentageWarning();
-            }
+
+        document.addEventListener('input', e => {
+            if (e.target.classList.contains('group-percentage')) updatePercentageWarning();
         });
-        
+
+        // ── Processamento principal ───────────────────────────────────
+
         function processData() {
-            if (csvData.length === 0) {
-                alert('Por favor, faça upload de um CSV primeiro!');
-                return;
-            }
-            
-            const testName = document.getElementById('testName').value.trim();
-            if (!testName) {
-                alert('Por favor, defina um nome para o teste primeiro!');
-                return;
-            }
-            
-            if (!testNameVerified) {
-                alert('Por favor, verifique a disponibilidade do nome do teste antes de processar!');
-                return;
-            }
-            
+            if (!csvData.length)      { alert('Por favor, faça upload de um CSV primeiro!'); return; }
+            if (!document.getElementById('testName').value.trim()) { alert('Por favor, defina um nome para o teste primeiro!'); return; }
+            if (!testNameVerified)    { alert('Por favor, verifique a disponibilidade do nome do teste antes de processar!'); return; }
+
             showLoading('Processando dados...', 'Dividindo em grupos', 30);
-            
-            // Usa setTimeout para permitir que o loading apareça
+
             setTimeout(() => {
                 const groupItems = document.querySelectorAll('.group-item');
-            const groupConfigs = [];
-            let totalPercentage = 0;
-            
-            let hasError = false;
-            groupItems.forEach(item => {
-                const name = item.querySelector('.group-name').value.trim();
-                const percentage = parseFloat(item.querySelector('.group-percentage').value) || 0;
-                
-                if (!name) {
-                    alert('Todos os grupos precisam ter um nome!');
-                    hasError = true;
-                    return;
-                }
-                
-                groupConfigs.push({ name, percentage });
-                totalPercentage += percentage;
-            });
-            
-            if (hasError) {
-                hideLoading();
-                return;
-            }
-            
-            if (Math.abs(totalPercentage - 100) > 0.01) {
-                hideLoading();
-                alert(`A soma das porcentagens deve ser 100%. Atual: ${totalPercentage.toFixed(1)}%`);
-                return;
-            }
-            
-            document.getElementById('progressFill').style.width = '50%';
-            document.getElementById('loadingSubtext').textContent = 'Removendo duplicatas...';
-            
-            const uniqueData = [];
-            const seenIds = new Set();
-            
-            csvData.forEach(row => {
-                if (!seenIds.has(row.id)) {
-                    seenIds.add(row.id);
-                    uniqueData.push(row);
-                }
-            });
-            
-            document.getElementById('progressFill').style.width = '70%';
-            document.getElementById('loadingSubtext').textContent = 'Embaralhando e dividindo...';
-            
-            const shuffled = shuffleArray(uniqueData);
-            
-            groups = {};
-            let startIndex = 0;
-            
-            groupConfigs.forEach((config, index) => {
-                let groupSize;
-                if (index === groupConfigs.length - 1) {
-                    groupSize = shuffled.length - startIndex;
-                } else {
-                    groupSize = Math.round(shuffled.length * (config.percentage / 100));
-                }
-                
-                groups[config.name] = shuffled.slice(startIndex, startIndex + groupSize);
-                startIndex += groupSize;
-            });
-            
-            document.getElementById('progressFill').style.width = '90%';
-            document.getElementById('loadingSubtext').textContent = 'Gerando resultados...';
-            
-            updateStats();
-            generateResults();
-            
-            document.getElementById('progressFill').style.width = '100%';
-            
-            setTimeout(() => {
-                hideLoading();
-                document.getElementById('resultsSection').style.display = 'block';
-                document.getElementById('saveBtn').style.display = 'flex';
-                document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
-            }, 300);
-            
+                const groupConfigs = [];
+                let totalPct = 0;
+                let hasError = false;
+
+                groupItems.forEach(item => {
+                    const name = item.querySelector('.group-name').value.trim();
+                    const pct  = parseFloat(item.querySelector('.group-percentage').value) || 0;
+                    if (!name) { alert('Todos os grupos precisam ter um nome!'); hasError = true; return; }
+                    groupConfigs.push({ name, percentage: pct });
+                    totalPct += pct;
+                });
+
+                if (hasError) { hideLoading(); return; }
+                if (Math.abs(totalPct - 100) > 0.01) { hideLoading(); alert(`A soma das porcentagens deve ser 100%. Atual: ${totalPct.toFixed(1)}%`); return; }
+
+                document.getElementById('progressFill').style.width = '50%';
+                document.getElementById('loadingSubtext').textContent = 'Removendo duplicatas...';
+
+                const seen = new Set();
+                const unique = csvData.filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
+
+                document.getElementById('progressFill').style.width = '70%';
+                document.getElementById('loadingSubtext').textContent = 'Embaralhando e dividindo...';
+
+                const shuffled = shuffleArray(unique);
+                groups = {};
+                let start = 0;
+
+                groupConfigs.forEach((cfg, i) => {
+                    const size = i === groupConfigs.length - 1
+                        ? shuffled.length - start
+                        : Math.round(shuffled.length * (cfg.percentage / 100));
+                    groups[cfg.name] = shuffled.slice(start, start + size);
+                    start += size;
+                });
+
+                document.getElementById('progressFill').style.width = '90%';
+                document.getElementById('loadingSubtext').textContent = 'Gerando resultados...';
+
+                updateStats();
+                generateResults();
+
+                document.getElementById('progressFill').style.width = '100%';
+                setTimeout(() => {
+                    hideLoading();
+                    document.getElementById('resultsSection').style.display = 'block';
+                    document.getElementById('saveBtn').style.display = 'flex';
+                    document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+                }, 300);
             }, 100);
         }
-        
-        function updateStats() {
-            const statsContainer = document.getElementById('statsContainer');
-            statsContainer.innerHTML = '';
-            
-            const totalRecords = Object.values(groups).reduce((sum, arr) => sum + arr.length, 0);
-            statsContainer.innerHTML += `
-                <div class="stat-card">
-                    <div class="stat-value">${totalRecords}</div>
-                    <div class="stat-label">Total de Registros</div>
-                </div>
-            `;
-            
-            Object.entries(groups).forEach(([name, records]) => {
-                const percentage = ((records.length / totalRecords) * 100).toFixed(1);
-                statsContainer.innerHTML += `
-                    <div class="stat-card">
-                        <div class="stat-value">${records.length}</div>
-                        <div class="stat-label">${name} (${percentage}%)</div>
-                    </div>
-                `;
-            });
-            
-            statsContainer.style.display = 'grid';
-        }
-        
+
         function shuffleArray(array) {
-            const shuffled = [...array];
-            for (let i = shuffled.length - 1; i > 0; i--) {
+            const a = [...array];
+            for (let i = a.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
-                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                [a[i], a[j]] = [a[j], a[i]];
             }
-            return shuffled;
+            return a;
         }
-        
+
+        function updateStats() {
+            const c = document.getElementById('statsContainer');
+            const total = Object.values(groups).reduce((s, a) => s + a.length, 0);
+            c.innerHTML = `<div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Total de Registros</div></div>`;
+            Object.entries(groups).forEach(([name, recs]) => {
+                const pct = ((recs.length / total) * 100).toFixed(1);
+                c.innerHTML += `<div class="stat-card"><div class="stat-value">${recs.length}</div><div class="stat-label">${name} (${pct}%)</div></div>`;
+            });
+            c.style.display = 'grid';
+        }
+
         function generateResults() {
-            const formatIds = (records) => records.map(r => `'${r.id}'`).join(',\n');
-            
-            const formattedDiv = document.getElementById('formattedResults');
-            formattedDiv.innerHTML = '';
-            
-            Object.entries(groups).forEach(([name, records]) => {
-                const groupDiv = document.createElement('div');
-                groupDiv.className = 'group-result-item';
-                groupDiv.innerHTML = `
+            const fmt = recs => recs.map(r => `'${r.id}'`).join(',\n');
+            const div = document.getElementById('formattedResults');
+            div.innerHTML = '';
+
+            Object.entries(groups).forEach(([name, recs]) => {
+                const g = document.createElement('div');
+                g.className = 'group-result-item';
+                g.innerHTML = `
                     <div class="section-title">IDs Grupo ${name}</div>
-                    <div class="result-box">
-                        <pre id="formatted-${name}">${formatIds(records)}</pre>
-                    </div>
+                    <div class="result-box"><pre id="formatted-${name}">${fmt(recs)}</pre></div>
                     <div class="button-group">
                         <button class="btn-primary copy-btn btn-small" onclick="copyToClipboard('formatted-${name}', this)">
-                            Copiar ${name}
-                            <span class="copy-feedback">Copiado!</span>
+                            Copiar ${name}<span class="copy-feedback">Copiado!</span>
                         </button>
-                    </div>
-                `;
-                formattedDiv.appendChild(groupDiv);
+                    </div>`;
+                div.appendChild(g);
             });
-            
+
             generateQuery();
             generateCSVButtons();
         }
-        
+
         function generateQuery() {
-            const groupCTEs = Object.entries(groups).map(([name, records]) => {
-                const formatIds = records.map(r => `('${r.id}')`).join(',\n');
+            const groupCTEs = Object.entries(groups).map(([name, recs]) => {
+                const ids = recs.map(r => `('${r.id}')`).join(',\n');
                 return `${name}_ids as (
 select column1 as customer_id
 from values
--- GRUPO ${name.toUpperCase()} (${records.length} IDs)
-${formatIds}
+-- GRUPO ${name.toUpperCase()} (${recs.length} IDs)
+${ids}
 )
 ,
 ${name}_base as (
@@ -1215,10 +1105,10 @@ inner join ${name}_ids ids
     on o.customer_id = ids.customer_id
 )`;
             }).join('\n,\n');
-            
-            const unionAll = Object.keys(groups).map(name => `select * from ${name}_base`).join('\n union all\n');
-            
-            const fullQuery = `with ${groupCTEs}
+
+            const unionAll = Object.keys(groups).map(n => `select * from ${n}_base`).join('\n union all\n');
+
+            document.getElementById('fullQuery').textContent = `with ${groupCTEs}
 ,
 all_churns as (
 ${unionAll}
@@ -1254,189 +1144,102 @@ left join visits v
     on a.customer_id=v.customer_id 
 left join orders o
     on a.customer_id=o.customer_id
-    -- and timestampdiff(hour, v.event_datetime, order_datetime)<=2
 group by all
 order by 1`;
-            
-            document.getElementById('fullQuery').textContent = fullQuery;
         }
-        
+
         function generateCSVButtons() {
-            const csvDiv = document.getElementById('csvButtons');
-            csvDiv.innerHTML = '';
-            
-            Object.entries(groups).forEach(([name, records]) => {
+            const div = document.getElementById('csvButtons');
+            div.innerHTML = '';
+            Object.entries(groups).forEach(([name, recs]) => {
                 const btn = document.createElement('button');
                 btn.className = 'btn-primary';
                 btn.style.marginBottom = '10px';
-                btn.innerHTML = `Download ${name}.csv (${records.length} registros)`;
-                btn.onclick = () => downloadCSV(name, records);
-                csvDiv.appendChild(btn);
+                btn.innerHTML = `Download ${name}.csv (${recs.length} registros)`;
+                btn.onclick = () => downloadCSV(name, recs);
+                div.appendChild(btn);
             });
         }
-        
+
         function downloadCSV(groupName, records) {
-            // Verifica quais colunas opcionais existem nos dados
-            const hasFirstName = records.some(r => r.first_name);
-            const hasLastName = records.some(r => r.last_name);
-            const hasZip = records.some(r => r.zip);
-            const hasCity = records.some(r => r.city);
-            
-            // Monta o header dinamicamente
+            const hasFirst = records.some(r => r.first_name);
+            const hasLast  = records.some(r => r.last_name);
+            const hasZip   = records.some(r => r.zip);
+            const hasCity  = records.some(r => r.city);
+
             let header = 'id,telefone,email';
-            if (hasFirstName) header += ',first_name';
-            if (hasLastName) header += ',last_name';
-            if (hasZip) header += ',zip';
-            if (hasCity) header += ',city';
-            header += '\n';
-            
-            let csvContent = header;
-            
-            records.forEach(record => {
-                let row = `${record.id},${record.telefone},${record.email}`;
-                if (hasFirstName) row += `,${record.first_name}`;
-                if (hasLastName) row += `,${record.last_name}`;
-                if (hasZip) row += `,${record.zip}`;
-                if (hasCity) row += `,${record.city}`;
-                csvContent += row + '\n';
+            if (hasFirst) header += ',first_name';
+            if (hasLast)  header += ',last_name';
+            if (hasZip)   header += ',zip';
+            if (hasCity)  header += ',city';
+
+            const rows = records.map(r => {
+                let row = `${r.id},${r.telefone},${r.email}`;
+                if (hasFirst) row += `,${r.first_name}`;
+                if (hasLast)  row += `,${r.last_name}`;
+                if (hasZip)   row += `,${r.zip}`;
+                if (hasCity)  row += `,${r.city}`;
+                return row;
             });
-            
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            const url = URL.createObjectURL(blob);
-            
-            link.setAttribute('href', url);
-            link.setAttribute('download', `${groupName}_${new Date().toISOString().slice(0,10)}.csv`);
-            link.style.visibility = 'hidden';
-            
+
+            const blob = new Blob([header + '\n' + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const link = Object.assign(document.createElement('a'), {
+                href: URL.createObjectURL(blob),
+                download: `${groupName}_${new Date().toISOString().slice(0,10)}.csv`,
+                style: 'visibility:hidden'
+            });
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         }
-        
+
         function switchTab(tabName) {
-            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-            
-            const clickedTab = Array.from(document.querySelectorAll('.tab')).find(tab => 
-                tab.textContent.includes(tabName === 'formatted' ? 'Formatados' : tabName === 'query' ? 'Query' : 'CSV')
-            );
-            if (clickedTab) clickedTab.classList.add('active');
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            const map = { formatted: 'Formatados', query: 'Query', csv: 'CSV' };
+            Array.from(document.querySelectorAll('.tab'))
+                .find(t => t.textContent.includes(map[tabName]))
+                ?.classList.add('active');
             document.getElementById(`tab-${tabName}`).classList.add('active');
         }
-        
+
         function copyToClipboard(elementId, button) {
-            const element = document.getElementById(elementId);
-            if (!element) {
-                alert('Erro ao copiar. Tente novamente.');
-                return;
-            }
-            
-            const text = element.textContent;
-            
-            if (!text || text.trim() === '') {
-                alert('Nenhum conteúdo para copiar. Processe os dados primeiro!');
-                return;
-            }
-            
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            textArea.style.position = 'fixed';
-            textArea.style.opacity = '0';
-            
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            
-            let success = false;
-            try {
-                success = document.execCommand('copy');
-            } catch (err) {
-                console.error('Erro ao copiar:', err);
-            }
-            
-            document.body.removeChild(textArea);
-            
-            if (success) {
-                const feedback = button.querySelector('.copy-feedback');
-                if (feedback) {
-                    feedback.classList.add('show');
-                    setTimeout(() => feedback.classList.remove('show'), 2000);
-                }
-            } else {
-                showCopyModal(text);
-            }
+            const text = document.getElementById(elementId)?.textContent;
+            if (!text?.trim()) { alert('Nenhum conteúdo para copiar.'); return; }
+
+            navigator.clipboard?.writeText(text).then(() => {
+                const fb = button.querySelector('.copy-feedback');
+                if (fb) { fb.classList.add('show'); setTimeout(() => fb.classList.remove('show'), 2000); }
+            }).catch(() => showCopyModal(text));
         }
-        
+
         function showCopyModal(text) {
             const modal = document.createElement('div');
-            modal.style.position = 'fixed';
-            modal.style.top = '0';
-            modal.style.left = '0';
-            modal.style.width = '100%';
-            modal.style.height = '100%';
-            modal.style.background = 'rgba(0,0,0,0.8)';
-            modal.style.display = 'flex';
-            modal.style.alignItems = 'center';
-            modal.style.justifyContent = 'center';
-            modal.style.zIndex = '10000';
-            
-            const modalContent = document.createElement('div');
-            modalContent.style.background = 'white';
-            modalContent.style.padding = '30px';
-            modalContent.style.borderRadius = '12px';
-            modalContent.style.maxWidth = '80%';
-            modalContent.style.maxHeight = '80%';
-            modalContent.style.overflow = 'auto';
-            
-            const title = document.createElement('h3');
-            title.textContent = 'Copie manualmente (Ctrl+C / Cmd+C)';
-            title.style.marginBottom = '15px';
-            title.style.color = '#000000';
-            
-            const textArea = document.createElement('textarea');
-            textArea.value = text;
-            textArea.style.width = '100%';
-            textArea.style.height = '300px';
-            textArea.style.fontFamily = 'monospace';
-            textArea.style.fontSize = '12px';
-            textArea.style.padding = '10px';
-            textArea.style.border = '2px solid #0069FF';
-            textArea.style.borderRadius = '6px';
-            
-            const closeBtn = document.createElement('button');
-            closeBtn.textContent = 'Fechar';
-            closeBtn.style.marginTop = '15px';
-            closeBtn.style.padding = '10px 20px';
-            closeBtn.style.background = '#0069FF';
-            closeBtn.style.color = '#FFFFFF';
-            closeBtn.style.border = 'none';
-            closeBtn.style.borderRadius = '6px';
-            closeBtn.style.cursor = 'pointer';
-            closeBtn.onclick = () => document.body.removeChild(modal);
-            
-            modalContent.appendChild(title);
-            modalContent.appendChild(textArea);
-            modalContent.appendChild(closeBtn);
-            modal.appendChild(modalContent);
-            document.body.appendChild(modal);
-            
-            textArea.select();
+            modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:10000;';
+            const box = document.createElement('div');
+            box.style.cssText = 'background:white;padding:30px;border-radius:12px;max-width:80%;max-height:80%;overflow:auto;';
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.cssText = 'width:100%;height:300px;font-family:monospace;font-size:12px;padding:10px;border:2px solid #0069FF;border-radius:6px;';
+            const close = document.createElement('button');
+            close.textContent = 'Fechar';
+            close.style.cssText = 'margin-top:15px;padding:10px 20px;background:#0069FF;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;';
+            close.onclick = () => document.body.removeChild(modal);
+            box.appendChild(Object.assign(document.createElement('h3'), { textContent: 'Copie manualmente (Ctrl+C)', style: 'margin-bottom:15px;' }));
+            box.appendChild(ta); box.appendChild(close); modal.appendChild(box); document.body.appendChild(modal);
+            ta.select();
         }
-        
+
         function clearAll() {
-            if (confirm('Tem certeza que deseja limpar todos os dados?')) {
-                document.getElementById('csvFile').value = '';
-                document.getElementById('fileName').textContent = '';
-                document.getElementById('testName').value = '';
-                document.getElementById('testNameFeedback').style.display = 'none';
-                document.getElementById('statsContainer').style.display = 'none';
-                document.getElementById('resultsSection').style.display = 'none';
-                document.getElementById('saveBtn').style.display = 'none';
-                groups = {};
-                csvData = [];
-                testNameVerified = false;
-            }
+            if (!confirm('Tem certeza que deseja limpar todos os dados?')) return;
+            document.getElementById('csvFile').value = '';
+            document.getElementById('fileName').textContent = '';
+            document.getElementById('testName').value = '';
+            document.getElementById('testNameFeedback').style.display = 'none';
+            document.getElementById('statsContainer').style.display = 'none';
+            document.getElementById('resultsSection').style.display = 'none';
+            document.getElementById('saveBtn').style.display = 'none';
+            groups = {}; csvData = []; testNameVerified = false;
         }
     </script>
 </body>
